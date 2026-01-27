@@ -53,15 +53,15 @@ export default function Home() {
 
           {/* Main Title */}
           <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-            انطلق نحو
+           مطبخ تكنوفيست
             <span className="block text-transparent bg-clip-text bg-gradient-to-l from-teknofest-orange to-teknofest-cyan">
-              المستقبل
+              مع ابتكار
             </span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-xl sm:text-2xl text-gray-300 max-w-3xl mx-auto mb-10 leading-relaxed">
-            منصة التسجيل الرسمية لمسابقات تكنوفيست. سجّل الآن وكن جزءاً من أكبر حدث تكنولوجي في المنطقة!
+            هنا تعيش تجربة حقيقية لمسابقات تكنوفيست. سجّل الآن وجرب أكبر حدث تكنولوجي في المنطقة!
           </p>
 
           {/* CTA Buttons */}

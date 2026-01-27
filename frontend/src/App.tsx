@@ -10,6 +10,7 @@ import AdminTeams from './pages/admin/AdminTeams'
 import AdminIndividuals from './pages/admin/AdminIndividuals'
 import AdminProjects from './pages/admin/AdminProjects'
 import AdminEvaluations from './pages/admin/AdminEvaluations'
+import AdminManagement from './pages/admin/AdminManagement'
 import TopTeams from './pages/TopTeams'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -35,6 +36,7 @@ function App() {
           <Route path="individuals" element={<AdminIndividuals />} />
           <Route path="projects" element={<AdminProjects />} />
           <Route path="evaluations" element={<AdminEvaluations />} />
+          <Route path="management" element={<AdminManagement />} />
         </Route>
       </Routes>
     </div>

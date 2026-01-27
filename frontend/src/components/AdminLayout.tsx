@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -10,8 +10,10 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Shield,
 } from 'lucide-react'
 import Logo from './Logo'
+import { adminService } from '../services/api'
 
 const sidebarLinks = [
   { to: '/admin', label: 'لوحة التحكم', icon: LayoutDashboard },
@@ -21,6 +23,8 @@ const sidebarLinks = [
   { to: '/admin/evaluations', label: 'التقييمات', icon: Star },
 ]
 
+const superAdminLink = { to: '/admin/management', label: 'إدارة الإداريين', icon: Shield }
+
 interface AdminLayoutProps {
   children: React.ReactNode
 }
@@ -28,8 +32,21 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      try {
+        const response = await adminService.checkSuperAdmin()
+        setIsSuperAdmin(response.is_super_admin)
+      } catch (error) {
+        setIsSuperAdmin(false)
+      }
+    }
+    checkSuperAdmin()
+  }, [])
 
   const handleLogout = () => {
     localStorage.removeItem('admin_token')
@@ -73,6 +90,22 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               </li>
             )
           })}
+          {/* Super Admin Link */}
+          {isSuperAdmin && (
+            <li>
+              <Link
+                to={superAdminLink.to}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                  location.pathname === superAdminLink.to
+                    ? 'bg-teknofest-orange text-white'
+                    : 'text-gray-300 hover:bg-teknofest-medium-blue'
+                }`}
+              >
+                <superAdminLink.icon className="w-5 h-5 flex-shrink-0" />
+                {sidebarOpen && <span className="font-medium">{superAdminLink.label}</span>}
+              </Link>
+            </li>
+          )}
         </ul>
       </nav>
 
@@ -139,7 +172,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
               <h2 className="text-xl font-bold text-white">
-                {sidebarLinks.find((l) => l.to === location.pathname)?.label || 'لوحة التحكم'}
+                {sidebarLinks.find((l) => l.to === location.pathname)?.label ||
+                 (location.pathname === superAdminLink.to ? superAdminLink.label : 'لوحة التحكم')}
               </h2>
             </div>
           </div>

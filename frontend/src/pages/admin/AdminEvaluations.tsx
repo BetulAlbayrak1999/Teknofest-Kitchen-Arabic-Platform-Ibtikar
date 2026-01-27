@@ -11,6 +11,7 @@ import {
   Edit3,
   Users,
   X,
+  AlertCircle,
 } from 'lucide-react'
 import { projectsService, evaluationsService, type ProjectEvaluationsDetails, type EvaluationWithAdmin } from '../../services/api'
 import type { ProjectSubmission } from '../../types'
@@ -31,6 +32,8 @@ export default function AdminEvaluations() {
   const [viewingEvaluations, setViewingEvaluations] = useState<ProjectEvaluationsDetails | null>(null)
   const [loadingEvaluations, setLoadingEvaluations] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [confirmAIProject, setConfirmAIProject] = useState<ProjectSubmission | null>(null)
+  const [confirmAdminProject, setConfirmAdminProject] = useState<ProjectSubmission | null>(null)
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -265,7 +268,7 @@ export default function AdminEvaluations() {
                   {/* Actions */}
                   <div className="flex flex-col gap-2">
                     <button
-                      onClick={() => handleOpenEvaluateModal(project)}
+                      onClick={() => setConfirmAdminProject(project)}
                       className="btn-primary text-sm py-2 flex items-center gap-1"
                     >
                       {project.admin_score ? (
@@ -290,7 +293,7 @@ export default function AdminEvaluations() {
                     </button>
                     {!project.ai_score && (
                       <button
-                        onClick={() => handleRequestAIEvaluation(project.id!)}
+                        onClick={() => setConfirmAIProject(project)}
                         disabled={requestingAI === project.id}
                         className="btn-secondary text-sm py-2 flex items-center gap-1 disabled:opacity-50"
                       >
@@ -394,7 +397,9 @@ export default function AdminEvaluations() {
                       </div>
                       <div className="text-left">
                         <p className="text-2xl font-bold text-white">{evalItem.score}</p>
-                        <p className="text-xs text-gray-400">من 75 </p>
+                        <p className="text-xs text-gray-400">
+                          من {evalItem.is_ai_evaluation ? '25' : '75'}
+                        </p>
                       </div>
                     </div>
                     {evalItem.notes && (
@@ -509,6 +514,87 @@ export default function AdminEvaluations() {
                   <Save className="w-5 h-5" />
                 )}
                 {isUpdating ? 'تحديث التقييم' : 'حفظ التقييم'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm AI Evaluation Modal */}
+      {confirmAIProject && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-md w-full">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-teknofest-cyan/20 rounded-xl flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-teknofest-cyan" />
+              </div>
+              <h2 className="text-xl font-bold text-white">تأكيد طلب تقييم AI</h2>
+            </div>
+            <p className="text-gray-300 mb-6">
+              هل أنت متأكد من طلب تقييم الذكاء الاصطناعي للمشروع:
+              <span className="text-white font-medium block mt-2">"{confirmAIProject.title}"</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmAIProject(null)}
+                className="px-6 py-2 text-gray-300 hover:text-white transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={() => {
+                  handleRequestAIEvaluation(confirmAIProject.id!)
+                  setConfirmAIProject(null)
+                }}
+                disabled={requestingAI === confirmAIProject.id}
+                className="btn-primary flex items-center gap-2 disabled:opacity-50"
+              >
+                {requestingAI === confirmAIProject.id ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Bot className="w-5 h-5" />
+                )}
+                تأكيد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Admin Evaluation Modal */}
+      {confirmAdminProject && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-md w-full">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-teknofest-orange/20 rounded-xl flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-teknofest-orange" />
+              </div>
+              <h2 className="text-xl font-bold text-white">
+                {confirmAdminProject.admin_score ? 'تأكيد تعديل التقييم' : 'تأكيد التقييم'}
+              </h2>
+            </div>
+            <p className="text-gray-300 mb-6">
+              {confirmAdminProject.admin_score
+                ? 'هل أنت متأكد من تعديل تقييمك للمشروع:'
+                : 'هل أنت متأكد من تقييم المشروع:'}
+              <span className="text-white font-medium block mt-2">"{confirmAdminProject.title}"</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmAdminProject(null)}
+                className="px-6 py-2 text-gray-300 hover:text-white transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={() => {
+                  handleOpenEvaluateModal(confirmAdminProject)
+                  setConfirmAdminProject(null)
+                }}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Star className="w-5 h-5" />
+                متابعة
               </button>
             </div>
           </div>

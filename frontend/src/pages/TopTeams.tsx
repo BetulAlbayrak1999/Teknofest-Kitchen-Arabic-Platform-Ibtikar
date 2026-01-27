@@ -154,11 +154,11 @@ export default function TopTeams() {
                         {/* Score Breakdown */}
                         <div className="flex items-center gap-4 text-sm">
                           <span className="text-gray-400">
-                            تقييم الإداريين:{' '}
+                            تقييم الإداريين من 75:{' '}
                             <span className="text-white font-medium">{team.admin_score.toFixed(1)}</span>
                           </span>
                           <span className="text-gray-400">
-                            تقييم AI:{' '}
+                           تقييم AI من 25:{' '}
                             <span className="text-white font-medium">{team.ai_score.toFixed(1)}</span>
                           </span>
                         </div>

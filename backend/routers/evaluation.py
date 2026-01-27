@@ -88,18 +88,72 @@ async def update_admin_evaluation(
         Evaluation.admin_id == current_admin["admin_id"],
         Evaluation.is_ai_evaluation == False
     ).first()
-    
+
     if not evaluation:
         raise HTTPException(status_code=404, detail="التقييم غير موجود أو ليس لديك صلاحية التعديل")
-    
+
     evaluation.score = evaluation_data.score
     evaluation.notes = evaluation_data.notes
     evaluation.detailed_scores = evaluation_data.detailed_scores
-    
+
     db.commit()
     db.refresh(evaluation)
-    
+
     return evaluation
+
+
+# ==================== تميز المشاريع (للظهور في صفحة أفضل الفرق) ====================
+
+@router.post("/feature/{project_id}")
+async def toggle_project_featured(
+    project_id: int,
+    current_admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    تبديل حالة تميز المشروع (إظهار/إخفاء في صفحة أفضل الفرق)
+    - يمكن لأي إداري تميز المشروع
+    """
+    project = db.query(ProjectSubmission).filter(
+        ProjectSubmission.id == project_id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+
+    # تبديل حالة التميز
+    project.is_featured = not project.is_featured
+    db.commit()
+    db.refresh(project)
+
+    status_text = "تم إضافة المشروع لصفحة أفضل الفرق" if project.is_featured else "تم إزالة المشروع من صفحة أفضل الفرق"
+
+    return {
+        "project_id": project_id,
+        "is_featured": project.is_featured,
+        "message": status_text
+    }
+
+
+@router.get("/featured-projects")
+async def get_featured_projects(
+    db: Session = Depends(get_db)
+):
+    """الحصول على قائمة المشاريع المميزة"""
+    projects = db.query(ProjectSubmission).filter(
+        ProjectSubmission.is_featured == True
+    ).all()
+
+    return [
+        {
+            "id": p.id,
+            "title": p.title,
+            "team_name": p.team.team_name,
+            "field": p.field,
+            "is_featured": p.is_featured
+        }
+        for p in projects
+    ]
 
 
 # ==================== تقييم AI ====================
@@ -313,10 +367,13 @@ async def get_top_teams(
 ):
     """
     الحصول على أفضل الفرق
-    - يعرض أفضل 5 فرق بناءً على التقييم النهائي
+    - يعرض فقط الفرق المميزة من قبل الإداريين
+    - مرتبة بناءً على التقييم النهائي
     """
-    # جلب جميع المشاريع مع تقييماتها
-    projects = db.query(ProjectSubmission).all()
+    # جلب المشاريع المميزة فقط
+    projects = db.query(ProjectSubmission).filter(
+        ProjectSubmission.is_featured == True
+    ).all()
     
     scored_projects = []
     

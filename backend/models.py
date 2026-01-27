@@ -199,6 +199,7 @@ class ProjectSubmission(Base):
     # حالة المشروع
     is_complete = Column(Boolean, default=False)  # هل مكتمل؟
     character_count = Column(Integer, default=0)  # عدد الأحرف
+    is_featured = Column(Boolean, default=False)  # هل يظهر في صفحة أفضل الفرق؟
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

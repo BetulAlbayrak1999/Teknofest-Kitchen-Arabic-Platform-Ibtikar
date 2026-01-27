@@ -112,6 +112,7 @@ export interface ProjectSubmission {
   design_path?: string
   has_attachments?: boolean
   is_complete?: boolean
+  is_featured?: boolean
   character_count?: number
   created_at?: string
   updated_at?: string

@@ -93,7 +93,7 @@ export default function ProjectSubmission() {
             <FileText className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">تقديم المشروع</h1>
-          <p className="text-gray-400">قدّم مشروع المجموعة مع الوصف التقني الكامل</p>
+          <p className="text-gray-400">قدّم مشروع الفريق مع الوصف التقني الكامل</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">

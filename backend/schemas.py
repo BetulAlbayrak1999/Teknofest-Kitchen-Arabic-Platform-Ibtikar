@@ -176,10 +176,11 @@ class ProjectSubmissionResponse(BaseModel):
     design_path: Optional[str]
     has_attachments: bool
     is_complete: bool
+    is_featured: bool = False
     character_count: int
     created_at: datetime
     updated_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True
 

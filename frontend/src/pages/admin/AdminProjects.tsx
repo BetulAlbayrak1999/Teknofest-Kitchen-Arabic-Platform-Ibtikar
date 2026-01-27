@@ -10,8 +10,9 @@ import {
   Star,
   CheckCircle,
   AlertCircle,
+  Award,
 } from 'lucide-react'
-import { projectsService } from '../../services/api'
+import { projectsService, evaluationsService } from '../../services/api'
 import type { ProjectSubmission } from '../../types'
 
 export default function AdminProjects() {
@@ -20,6 +21,7 @@ export default function AdminProjects() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedProject, setSelectedProject] = useState<ProjectSubmission | null>(null)
   const [downloading, setDownloading] = useState<number | null>(null)
+  const [togglingFeature, setTogglingFeature] = useState<number | null>(null)
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -35,6 +37,33 @@ export default function AdminProjects() {
 
     fetchProjects()
   }, [])
+
+  const handleToggleFeatured = async (projectId: number) => {
+    setTogglingFeature(projectId)
+    try {
+      const result = await evaluationsService.toggleFeatured(projectId)
+
+      // Update projects list
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === projectId ? { ...p, is_featured: result.is_featured } : p
+        )
+      )
+
+      // Update selected project if it's the same
+      if (selectedProject?.id === projectId) {
+        setSelectedProject((prev) =>
+          prev ? { ...prev, is_featured: result.is_featured } : null
+        )
+      }
+
+      toast.success(result.message)
+    } catch (error) {
+      toast.error('حدث خطأ في تغيير حالة التميز')
+    } finally {
+      setTogglingFeature(null)
+    }
+  }
 
   const filteredProjects = projects.filter(
     (project) =>
@@ -152,9 +181,31 @@ export default function AdminProjects() {
                     يحتوي مرفقات
                   </span>
                 )}
+                {project.is_featured && (
+                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs flex items-center gap-1">
+                    <Award className="w-3 h-3" />
+                    مميز
+                  </span>
+                )}
               </div>
 
               <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => handleToggleFeatured(project.id!)}
+                  disabled={togglingFeature === project.id}
+                  className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                    project.is_featured
+                      ? 'text-yellow-400 bg-yellow-500/20 hover:bg-yellow-500/30'
+                      : 'text-gray-400 hover:text-yellow-400 hover:bg-teknofest-medium-blue'
+                  }`}
+                  title={project.is_featured ? 'إزالة من أفضل الفرق' : 'إضافة لأفضل الفرق'}
+                >
+                  {togglingFeature === project.id ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Award className="w-5 h-5" />
+                  )}
+                </button>
                 <button
                   onClick={() => setSelectedProject(project)}
                   className="p-2 text-gray-400 hover:text-white hover:bg-teknofest-medium-blue rounded-lg transition-colors"
@@ -285,6 +336,22 @@ export default function AdminProjects() {
 
               {/* Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-teknofest-light-blue/20">
+                <button
+                  onClick={() => handleToggleFeatured(selectedProject.id!)}
+                  disabled={togglingFeature === selectedProject.id}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+                    selectedProject.is_featured
+                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
+                      : 'btn-secondary'
+                  }`}
+                >
+                  {togglingFeature === selectedProject.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Award className="w-4 h-4" />
+                  )}
+                  {selectedProject.is_featured ? 'إزالة من أفضل الفرق' : 'إضافة لأفضل الفرق'}
+                </button>
                 <button
                   onClick={() => handleDownloadPdf(selectedProject.id!)}
                   disabled={downloading === selectedProject.id}

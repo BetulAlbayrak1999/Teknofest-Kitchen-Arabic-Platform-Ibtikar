@@ -186,6 +186,16 @@ export const evaluationsService = {
     const response = await api.get(`/evaluation/top-teams?limit=${limit}`)
     return response.data
   },
+
+  toggleFeatured: async (projectId: number): Promise<{ project_id: number; is_featured: boolean; message: string }> => {
+    const response = await api.post(`/evaluation/feature/${projectId}`)
+    return response.data
+  },
+
+  getFeaturedProjects: async (): Promise<{ id: number; title: string; team_name: string; field: string; is_featured: boolean }[]> => {
+    const response = await api.get('/evaluation/featured-projects')
+    return response.data
+  },
 }
 
 // ==================== Email ====================

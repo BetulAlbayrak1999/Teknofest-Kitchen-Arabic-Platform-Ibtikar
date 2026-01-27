@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
+from pydantic import BaseModel
 from database import get_db
 from models import Team, TeamMember, Individual, ProgramVersion, RegistrationType
 from schemas import (
@@ -13,6 +14,7 @@ from schemas import (
     ProjectFieldEnum, RegistrationTypeEnum,
     AssignIndividualsToTeam
 )
+from services.email_service import email_service
 
 router = APIRouter(prefix="/api/students", tags=["المشاركون"])
 
@@ -424,4 +426,164 @@ async def add_individuals_to_existing_team(
         "team_name": team.team_name,
         "total_members": len(team.members)
     }
+
+
+# ==================== إرسال رابط تلغرام ====================
+
+class TelegramLinkRequest(BaseModel):
+    telegram_link: str
+
+
+@router.post("/team/{team_id}/telegram")
+async def send_telegram_link_to_team(
+    team_id: int,
+    request: TelegramLinkRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    إرسال رابط مجموعة تلغرام لأعضاء فريق معين
+    - يحفظ الرابط في قاعدة البيانات للفريق
+    - يرسل بريد إلكتروني لجميع أعضاء الفريق
+    """
+    # التحقق من وجود الفريق
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="الفريق غير موجود")
+
+    # حفظ رابط التلغرام للفريق
+    team.telegram_group_link = request.telegram_link
+    db.commit()
+
+    # جمع بيانات أعضاء الفريق
+    if not team.members:
+        raise HTTPException(status_code=400, detail="لا يوجد أعضاء في الفريق")
+
+    # إرسال البريد الإلكتروني لكل عضو
+    results = {
+        "team_id": team.id,
+        "team_name": team.team_name,
+        "telegram_link": request.telegram_link,
+        "total": len(team.members),
+        "sent": 0,
+        "failed": 0,
+        "details": []
+    }
+
+    for member in team.members:
+        html_content = create_telegram_email_template(
+            recipient_name=member.full_name,
+            telegram_link=request.telegram_link
+        )
+
+        result = await email_service.send_email(
+            to_email=member.email,
+            subject="دعوة للانضمام إلى مجموعة تلغرام - مطبخ تكنوفيست مع ابتكار",
+            html_content=html_content
+        )
+
+        if result["success"]:
+            results["sent"] += 1
+        else:
+            results["failed"] += 1
+
+        results["details"].append({
+            "email": member.email,
+            "name": member.full_name,
+            **result
+        })
+
+    return results
+
+
+def create_telegram_email_template(recipient_name: str, telegram_link: str) -> str:
+    """إنشاء قالب البريد لدعوة تلغرام"""
+    return f"""
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background-color: #f5f5f5;
+                margin: 0;
+                padding: 20px;
+                direction: rtl;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: white;
+                border-radius: 10px;
+                padding: 30px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            .header {{
+                text-align: center;
+                border-bottom: 2px solid #FF6B00;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+            }}
+            .header h1 {{
+                color: #FF6B00;
+                margin: 0;
+                font-size: 24px;
+            }}
+            .content {{
+                line-height: 2;
+                color: #333;
+                font-size: 16px;
+            }}
+            .content p {{
+                margin: 10px 0;
+            }}
+            .btn {{
+                display: inline-block;
+                background: linear-gradient(135deg, #FF6B00 0%, #FF8C42 100%);
+                color: white;
+                padding: 15px 30px;
+                text-decoration: none;
+                border-radius: 25px;
+                margin: 20px 0;
+                font-weight: bold;
+                font-size: 16px;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #eee;
+                color: #888;
+                font-size: 12px;
+            }}
+            .greeting {{
+                color: #FF6B00;
+                font-weight: bold;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🏆 مطبخ تكنوفيست مع ابتكار</h1>
+            </div>
+            <div class="content">
+                <p>السلام عليكم ورحمة الله</p>
+                <p>حياكم الله يا <span class="greeting">{recipient_name}</span></p>
+                <p>أهلا وسهلا بكم في مطبخ تكنوفيست مع ابتكار</p>
+                <p>مرفق لكم رابط الانضمام إلى مجموعة التلغرام الخاصة بكم</p>
+                <p style="text-align: center;">
+                    <a href="{telegram_link}" class="btn">
+                        📱 رابط مجموعة التلغرام هنا
+                    </a>
+                </p>
+                <p>دمتم بخير</p>
+            </div>
+            <div class="footer">
+                <p>© 2026 مطبخ تكنوفيست مع ابتكار - جميع الحقوق محفوظة</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
     

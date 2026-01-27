@@ -6,8 +6,13 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from database import init_db
+from dotenv import load_dotenv
+from database import init_db, SessionLocal
+from models import Admin
+from services.auth_service import get_password_hash
 from routers import students_router, projects_router, admin_router, evaluation_router, email_router
+
+load_dotenv()
 
 # إنشاء التطبيق
 app = FastAPI(
@@ -62,6 +67,47 @@ async def startup_event():
     print("🚀 جاري تشغيل منصة تكنوفيست...")
     init_db()
     print("✅ تم تهيئة قاعدة البيانات")
+
+    # إنشاء المدير الأعلى تلقائياً إذا لم يكن موجوداً
+    create_super_admin()
+
+
+def create_super_admin():
+    """إنشاء المدير الأعلى إذا لم يكن موجوداً"""
+    super_admin_username = os.getenv("SUPER_ADMIN_USERNAME")
+    super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD")
+
+    if not super_admin_username or not super_admin_password:
+        print("⚠️ لم يتم تحديد بيانات المدير الأعلى في ملف .env")
+        return
+
+    db = SessionLocal()
+    try:
+        # التحقق من وجود المدير الأعلى
+        existing = db.query(Admin).filter(Admin.username == super_admin_username).first()
+        if existing:
+            print(f"✅ المدير الأعلى '{super_admin_username}' موجود مسبقاً")
+            return
+
+        # إنشاء المدير الأعلى
+        admin = Admin(
+            username=super_admin_username,
+            email=f"{super_admin_username}@teknofest.local",
+            hashed_password=get_password_hash(super_admin_password),
+            full_name="المدير الأعلى",
+            is_superadmin=True,
+            is_active=True,
+            evaluation_weight=100.0
+        )
+
+        db.add(admin)
+        db.commit()
+        print(f"✅ تم إنشاء المدير الأعلى '{super_admin_username}' بنجاح")
+    except Exception as e:
+        print(f"❌ خطأ في إنشاء المدير الأعلى: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @app.get("/")

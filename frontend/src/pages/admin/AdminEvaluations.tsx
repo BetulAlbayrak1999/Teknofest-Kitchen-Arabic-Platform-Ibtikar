@@ -390,7 +390,7 @@ export default function AdminEvaluations() {
                           </p>
                           {!evalItem.is_ai_evaluation && evalItem.admin_weight && (
                             <p className="text-gray-400 text-sm">
-                              وزن التقييم: {evalItem.admin_weight}%
+                             
                             </p>
                           )}
                         </div>

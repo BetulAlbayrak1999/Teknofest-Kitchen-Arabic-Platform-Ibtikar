@@ -10,6 +10,7 @@ import type {
   AuthToken,
   TopTeam,
   Admin,
+  TeamWithSpace,
 } from '../types'
 
 const API_BASE_URL = '/api'
@@ -129,6 +130,16 @@ export const individualsService = {
       team_name: teamName,
       field: field,
     })
+    return response.data
+  },
+
+  getTeamsWithSpace: async (): Promise<TeamWithSpace[]> => {
+    const response = await api.get('/students/teams-with-space')
+    return response.data
+  },
+
+  addToExistingTeam: async (teamId: number, individualIds: number[]): Promise<{ message: string; team_id: number; team_name: string; total_members: number }> => {
+    const response = await api.post(`/students/add-to-team/${teamId}`, individualIds)
     return response.data
   },
 }

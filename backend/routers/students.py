@@ -1,16 +1,17 @@
 """
 مسارات تسجيل الطلاب (الفرق والأفراد)
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from database import get_db
 from models import Team, TeamMember, Individual, ProgramVersion, RegistrationType
 from schemas import (
-    TeamCreate, TeamResponse, 
+    TeamCreate, TeamResponse,
     IndividualCreate, IndividualResponse,
-    ProjectFieldEnum, RegistrationTypeEnum
+    ProjectFieldEnum, RegistrationTypeEnum,
+    AssignIndividualsToTeam
 )
 
 router = APIRouter(prefix="/api/students", tags=["المشاركون"])
@@ -268,4 +269,159 @@ async def get_available_fields():
         {"value": field.value, "label": field.value}
         for field in ProjectFieldEnum
     ]
+
+
+# ==================== الفرق المتاحة للإضافة ====================
+
+@router.get("/teams-with-space")
+async def get_teams_with_space(db: Session = Depends(get_db)):
+    """الحصول على الفرق التي لديها مساحة لأعضاء إضافيين (أقل من 6 أعضاء)"""
+    version = get_active_program_version(db)
+
+    # الحصول على الفرق مع عدد أعضائها
+    teams = db.query(Team).filter(
+        Team.is_active == True,
+        Team.program_version_id == version.id
+    ).all()
+
+    teams_with_space = []
+    for team in teams:
+        member_count = len(team.members)
+        if member_count < 6:
+            teams_with_space.append({
+                "id": team.id,
+                "team_name": team.team_name,
+                "field": team.field,
+                "member_count": member_count,
+                "available_slots": 6 - member_count,
+                "members": [
+                    {
+                        "id": m.id,
+                        "full_name": m.full_name,
+                        "email": m.email,
+                        "is_leader": m.is_leader
+                    }
+                    for m in team.members
+                ]
+            })
+
+    return teams_with_space
+
+
+@router.post("/assign-individuals")
+async def assign_individuals_to_team(
+    assignment: AssignIndividualsToTeam,
+    db: Session = Depends(get_db)
+):
+    """فرز أفراد إلى فريق جديد"""
+    # التحقق من وجود الأفراد
+    individuals = db.query(Individual).filter(
+        Individual.id.in_(assignment.individual_ids),
+        Individual.is_assigned == False
+    ).all()
+
+    if len(individuals) != len(assignment.individual_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
+        )
+
+    # الحصول على نسخة البرنامج
+    version = get_active_program_version(db)
+
+    # إنشاء فريق جديد
+    team = Team(
+        team_name=assignment.team_name,
+        registration_type=RegistrationType.TEAM_NO_IDEA,
+        field=assignment.field.value,
+        program_version_id=version.id
+    )
+    db.add(team)
+    db.commit()
+    db.refresh(team)
+
+    # إضافة الأعضاء
+    for i, ind in enumerate(individuals):
+        member = TeamMember(
+            team_id=team.id,
+            full_name=ind.full_name,
+            email=ind.email,
+            phone=ind.phone,
+            is_leader=(i == 0)
+        )
+        db.add(member)
+
+        # تحديث حالة الفرد
+        ind.is_assigned = True
+        ind.assigned_team_id = team.id
+
+    db.commit()
+    db.refresh(team)
+
+    return team
+
+
+@router.post("/add-to-team/{team_id}")
+async def add_individuals_to_existing_team(
+    team_id: int,
+    individual_ids: List[int] = Body(..., embed=False),
+    db: Session = Depends(get_db)
+):
+    """إضافة أفراد إلى فريق موجود"""
+    # التحقق من وجود الفريق
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="الفريق غير موجود")
+
+    # التحقق من عدد الأعضاء الحالي
+    current_members = len(team.members)
+    if current_members >= 6:
+        raise HTTPException(
+            status_code=400,
+            detail="الفريق ممتلئ (6 أعضاء)"
+        )
+
+    # التحقق من عدم تجاوز الحد الأقصى
+    if current_members + len(individual_ids) > 6:
+        raise HTTPException(
+            status_code=400,
+            detail=f"لا يمكن إضافة {len(individual_ids)} أفراد. المتاح: {6 - current_members} فقط"
+        )
+
+    # التحقق من وجود الأفراد
+    individuals = db.query(Individual).filter(
+        Individual.id.in_(individual_ids),
+        Individual.is_assigned == False
+    ).all()
+
+    if len(individuals) != len(individual_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
+        )
+
+    # إضافة الأعضاء
+    for ind in individuals:
+        member = TeamMember(
+            team_id=team.id,
+            full_name=ind.full_name,
+            email=ind.email,
+            phone=ind.phone,
+            is_leader=False
+        )
+        db.add(member)
+
+        # تحديث حالة الفرد
+        ind.is_assigned = True
+        ind.assigned_team_id = team.id
+
+    db.commit()
+    db.refresh(team)
+
+    return {
+        "message": f"تم إضافة {len(individuals)} أفراد إلى الفريق بنجاح",
+        "team_id": team.id,
+        "team_name": team.team_name,
+        "total_members": len(team.members)
+    }
     

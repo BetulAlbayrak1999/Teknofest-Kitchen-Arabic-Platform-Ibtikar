@@ -177,3 +177,18 @@ export interface TopTeam {
   admin_score: number
   ai_score: number
 }
+
+// Team with available space
+export interface TeamWithSpace {
+  id: number
+  team_name: string
+  field: ProjectField
+  member_count: number
+  available_slots: number
+  members: {
+    id: number
+    full_name: string
+    email: string
+    is_leader: boolean
+  }[]
+}

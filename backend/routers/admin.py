@@ -29,6 +29,8 @@ from services.pdf_generator import pdf_service
 # تحميل متغيرات البيئة
 load_dotenv()
 ADMIN_REGISTRATION_CODE = os.getenv("ADMIN_REGISTRATION_CODE", "")
+SUPER_ADMIN_USERNAME = os.getenv("SUPER_ADMIN_USERNAME", "")
+SUPER_ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD", "")
 
 router = APIRouter(prefix="/api/admin", tags=["الإداريون"])
 
@@ -138,18 +140,43 @@ async def update_admin_weight(
     current_admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """تحديث وزن صوت الإداري"""
+    """
+    تحديث وزن صوت الإداري
+    - فقط المدير الأعلى (super admin) يمكنه تعديل أوزان الإداريين
+    """
+    # التحقق من أن المستخدم الحالي هو المدير الأعلى
+    requesting_admin = db.query(Admin).filter(
+        Admin.id == current_admin["admin_id"]
+    ).first()
+
+    if not requesting_admin or requesting_admin.username != SUPER_ADMIN_USERNAME:
+        raise HTTPException(
+            status_code=403,
+            detail="فقط المدير الأعلى يمكنه تعديل أوزان الإداريين"
+        )
+
     admin = db.query(Admin).filter(Admin.id == admin_id).first()
     if not admin:
         raise HTTPException(status_code=404, detail="الإداري غير موجود")
-    
+
     if weight < 0 or weight > 100:
         raise HTTPException(status_code=400, detail="الوزن يجب أن يكون بين 0 و 100")
-    
+
     admin.evaluation_weight = weight
     db.commit()
-    
+
     return {"message": f"تم تحديث وزن الإداري إلى {weight}%"}
+
+
+@router.get("/is-super-admin")
+async def check_super_admin(
+    current_admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """التحقق مما إذا كان المستخدم الحالي هو المدير الأعلى"""
+    admin = db.query(Admin).filter(Admin.id == current_admin["admin_id"]).first()
+    is_super = admin and admin.username == SUPER_ADMIN_USERNAME
+    return {"is_super_admin": is_super}
 
 
 # ==================== فرز الأفراد إلى فرق ====================
@@ -307,11 +334,33 @@ async def export_project_pdf(
     evaluations = db.query(Evaluation).filter(
         Evaluation.project_id == project_id
     ).all()
-    
-    admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
-    ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
-    total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
-    
+
+    # تقييم AI (من 25)
+    ai_evaluation = next((e for e in evaluations if e.is_ai_evaluation), None)
+    ai_score = ai_evaluation.score if ai_evaluation else 0
+
+    # تقييمات الإداريين (من 75) - حساب المتوسط المرجح
+    admin_evaluations = [e for e in evaluations if not e.is_ai_evaluation]
+    if admin_evaluations:
+        admin_scores_weighted = []
+        for evaluation in admin_evaluations:
+            admin = db.query(Admin).filter(Admin.id == evaluation.admin_id).first()
+            weight = admin.evaluation_weight if admin else 100
+            admin_scores_weighted.append({
+                "score": evaluation.score,
+                "weight": weight
+            })
+
+        total_weight = sum(a["weight"] for a in admin_scores_weighted)
+        admin_score = sum(
+            a["score"] * a["weight"] for a in admin_scores_weighted
+        ) / total_weight if total_weight > 0 else 0
+    else:
+        admin_score = 0
+
+    # النتيجة النهائية: تقييم الإداريين (من 75) + تقييم AI (من 25) = من 100
+    total_score = (admin_score + ai_score) if evaluations else None
+
     project_data = {
         "title": project.title,
         "team_name": project.team.team_name,
@@ -323,9 +372,9 @@ async def export_project_pdf(
         "admin_score": admin_score,
         "ai_score": ai_score
     }
-    
+
     pdf_bytes = pdf_service.generate_project_pdf(project_data)
-    
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -342,17 +391,39 @@ async def export_all_projects_pdf(
 ):
     """تصدير جميع المشاريع كتقرير PDF"""
     projects = db.query(ProjectSubmission).all()
-    
+
     projects_data = []
     for project in projects:
         evaluations = db.query(Evaluation).filter(
             Evaluation.project_id == project.id
         ).all()
-        
-        admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
-        ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
-        total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
-        
+
+        # تقييم AI (من 25)
+        ai_evaluation = next((e for e in evaluations if e.is_ai_evaluation), None)
+        ai_score = ai_evaluation.score if ai_evaluation else 0
+
+        # تقييمات الإداريين (من 75) - حساب المتوسط المرجح
+        admin_evaluations = [e for e in evaluations if not e.is_ai_evaluation]
+        if admin_evaluations:
+            admin_scores_weighted = []
+            for evaluation in admin_evaluations:
+                admin = db.query(Admin).filter(Admin.id == evaluation.admin_id).first()
+                weight = admin.evaluation_weight if admin else 100
+                admin_scores_weighted.append({
+                    "score": evaluation.score,
+                    "weight": weight
+                })
+
+            total_weight = sum(a["weight"] for a in admin_scores_weighted)
+            admin_score = sum(
+                a["score"] * a["weight"] for a in admin_scores_weighted
+            ) / total_weight if total_weight > 0 else 0
+        else:
+            admin_score = 0
+
+        # النتيجة النهائية: تقييم الإداريين (من 75) + تقييم AI (من 25) = من 100
+        total_score = (admin_score + ai_score) if evaluations else None
+
         projects_data.append({
             "title": project.title,
             "team_name": project.team.team_name,

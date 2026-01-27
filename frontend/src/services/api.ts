@@ -184,6 +184,29 @@ export const projectsService = {
 
 // ==================== Evaluations ====================
 
+export interface EvaluationWithAdmin {
+  id: number
+  project_id: number
+  score: number
+  notes?: string
+  detailed_scores?: Record<string, number>
+  is_ai_evaluation: boolean
+  created_at?: string
+  admin_id?: number
+  admin_name?: string
+  admin_weight?: number
+  is_current_admin: boolean
+}
+
+export interface ProjectEvaluationsDetails {
+  project_id: number
+  project_title: string
+  evaluations: EvaluationWithAdmin[]
+  current_admin_evaluation?: EvaluationWithAdmin
+  total_admin_evaluations: number
+  has_ai_evaluation: boolean
+}
+
 export const evaluationsService = {
   create: async (evaluation: Omit<Evaluation, 'id'>): Promise<Evaluation> => {
     const response = await api.post('/evaluation/admin', evaluation)
@@ -200,6 +223,11 @@ export const evaluationsService = {
     return response.data
   },
 
+  getProjectEvaluationsWithDetails: async (projectId: number): Promise<ProjectEvaluationsDetails> => {
+    const response = await api.get(`/evaluation/project/${projectId}/details`)
+    return response.data
+  },
+
   getTopTeams: async (limit: number = 5): Promise<TopTeam[]> => {
     const response = await api.get(`/evaluation/top-teams?limit=${limit}`)
     return response.data
@@ -212,6 +240,25 @@ export const evaluationsService = {
 
   getFeaturedProjects: async (): Promise<{ id: number; title: string; team_name: string; field: string; is_featured: boolean }[]> => {
     const response = await api.get('/evaluation/featured-projects')
+    return response.data
+  },
+}
+
+// ==================== Admin Management ====================
+
+export const adminService = {
+  getAll: async (): Promise<Admin[]> => {
+    const response = await api.get('/admin/admins')
+    return response.data
+  },
+
+  updateWeight: async (adminId: number, weight: number): Promise<{ message: string }> => {
+    const response = await api.put(`/admin/admins/${adminId}/weight?weight=${weight}`)
+    return response.data
+  },
+
+  checkSuperAdmin: async (): Promise<{ is_super_admin: boolean }> => {
+    const response = await api.get('/admin/is-super-admin')
     return response.data
   },
 }

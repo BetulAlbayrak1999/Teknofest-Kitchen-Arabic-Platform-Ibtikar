@@ -198,7 +198,7 @@ class ProjectWithTeamResponse(ProjectSubmissionResponse):
 class EvaluationCreate(BaseModel):
     """إنشاء تقييم"""
     project_id: int
-    score: float = Field(..., ge=0, le=50)  # من 0 إلى 50
+    score: float = Field(..., ge=0, le=75)  # من 0 إلى 75
     notes: Optional[str] = None
     detailed_scores: Optional[dict] = None
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from database import get_db
-from models import ProjectSubmission, Team, TeamMember, ProgramVersion, Evaluation
+from models import ProjectSubmission, Team, TeamMember, ProgramVersion, Evaluation, Admin
 from schemas import (
     ProjectSubmissionCreate, ProjectSubmissionResponse,
     ProjectWithTeamResponse, ProjectFieldEnum
@@ -329,17 +329,32 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
     evaluations = db.query(Evaluation).filter(
         Evaluation.project_id == project_id
     ).all()
-    
-    admin_score = 0
-    ai_score = 0
-    
-    for eval in evaluations:
-        if eval.is_ai_evaluation:
-            ai_score = eval.score
-        else:
-            admin_score += eval.score
-    
-    total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
+
+    # تقييم AI (من 25)
+    ai_evaluation = next((e for e in evaluations if e.is_ai_evaluation), None)
+    ai_score = ai_evaluation.score if ai_evaluation else 0
+
+    # تقييمات الإداريين (من 75) - حساب المتوسط المرجح
+    admin_evaluations = [e for e in evaluations if not e.is_ai_evaluation]
+    if admin_evaluations:
+        admin_scores_weighted = []
+        for evaluation in admin_evaluations:
+            admin = db.query(Admin).filter(Admin.id == evaluation.admin_id).first()
+            weight = admin.evaluation_weight if admin else 100
+            admin_scores_weighted.append({
+                "score": evaluation.score,
+                "weight": weight
+            })
+
+        total_weight = sum(a["weight"] for a in admin_scores_weighted)
+        admin_score = sum(
+            a["score"] * a["weight"] for a in admin_scores_weighted
+        ) / total_weight if total_weight > 0 else 0
+    else:
+        admin_score = 0
+
+    # النتيجة النهائية: تقييم الإداريين (من 75) + تقييم AI (من 25) = من 100
+    total_score = (admin_score + ai_score) if evaluations else None
     
     response = ProjectWithTeamResponse(
         id=project.id,
@@ -433,9 +448,31 @@ async def export_project_pdf(project_id: int, db: Session = Depends(get_db)):
         Evaluation.project_id == project_id
     ).all()
 
-    admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
-    ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
-    total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
+    # تقييم AI (من 25)
+    ai_evaluation = next((e for e in evaluations if e.is_ai_evaluation), None)
+    ai_score = ai_evaluation.score if ai_evaluation else 0
+
+    # تقييمات الإداريين (من 75) - حساب المتوسط المرجح
+    admin_evaluations = [e for e in evaluations if not e.is_ai_evaluation]
+    if admin_evaluations:
+        admin_scores_weighted = []
+        for evaluation in admin_evaluations:
+            admin = db.query(Admin).filter(Admin.id == evaluation.admin_id).first()
+            weight = admin.evaluation_weight if admin else 100
+            admin_scores_weighted.append({
+                "score": evaluation.score,
+                "weight": weight
+            })
+
+        total_weight = sum(a["weight"] for a in admin_scores_weighted)
+        admin_score = sum(
+            a["score"] * a["weight"] for a in admin_scores_weighted
+        ) / total_weight if total_weight > 0 else 0
+    else:
+        admin_score = 0
+
+    # النتيجة النهائية: تقييم الإداريين (من 75) + تقييم AI (من 25) = من 100
+    total_score = (admin_score + ai_score) if evaluations else None
 
     project_data = {
         "title": project.title,

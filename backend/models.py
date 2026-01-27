@@ -224,7 +224,7 @@ class Evaluation(Base):
     # نوع التقييم
     is_ai_evaluation = Column(Boolean, default=False)  # تقييم AI أم إداري
     
-    # النقاط (من 50 للإداريين، من 50 لل AI)
+    # النقاط (من 75 للإداريين، من 25 لل AI)
     score = Column(Float, nullable=False)
     
     # الملاحظات

@@ -197,12 +197,12 @@ class PDFService:
             elements.append(Paragraph(score_text, styles['ArabicBody']))
 
             admin_score = self.reshape_arabic(
-                f"تقييم الإداريين: {project_data.get('admin_score', 0)}/50"
+                f"تقييم الإداريين: {project_data.get('admin_score', 0)}/75"
             )
             elements.append(Paragraph(admin_score, styles['ArabicBody']))
 
             ai_score = self.reshape_arabic(
-                f"تقييم AI: {project_data.get('ai_score', 0)}/50"
+                f"تقييم AI: {project_data.get('ai_score', 0)}/25"
             )
             elements.append(Paragraph(ai_score, styles['ArabicBody']))
 

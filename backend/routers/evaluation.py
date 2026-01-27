@@ -20,45 +20,49 @@ router = APIRouter(prefix="/api/evaluation", tags=["التقييم"])
 # ==================== تقييم الإداريين ====================
 
 @router.post("/admin", response_model=EvaluationResponse, status_code=status.HTTP_201_CREATED)
-async def create_admin_evaluation(
+async def create_or_update_admin_evaluation(
     evaluation_data: EvaluationCreate,
     current_admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """
-    إنشاء تقييم من إداري
-    - النقاط من 0 إلى 50
+    إنشاء أو تحديث تقييم من إداري
+    - النقاط من 0 إلى 75
     - يمكن إضافة ملاحظات
+    - يمكن للإداري تحديث تقييمه في أي وقت
     """
     # التحقق من وجود المشروع
     project = db.query(ProjectSubmission).filter(
         ProjectSubmission.id == evaluation_data.project_id
     ).first()
-    
+
     if not project:
         raise HTTPException(status_code=404, detail="المشروع غير موجود")
-    
-    # التحقق من عدم وجود تقييم سابق من نفس الإداري
+
+    # التحقق من النقاط
+    if evaluation_data.score < 0 or evaluation_data.score > 75:
+        raise HTTPException(
+            status_code=400,
+            detail="النقاط يجب أن تكون بين 0 و 75"
+        )
+
+    # التحقق من وجود تقييم سابق من نفس الإداري
     existing = db.query(Evaluation).filter(
         Evaluation.project_id == evaluation_data.project_id,
         Evaluation.admin_id == current_admin["admin_id"],
         Evaluation.is_ai_evaluation == False
     ).first()
-    
+
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="لقد قمت بتقييم هذا المشروع مسبقاً"
-        )
-    
-    # التحقق من النقاط
-    if evaluation_data.score < 0 or evaluation_data.score > 50:
-        raise HTTPException(
-            status_code=400,
-            detail="النقاط يجب أن تكون بين 0 و 50"
-        )
-    
-    # إنشاء التقييم
+        # تحديث التقييم الموجود
+        existing.score = evaluation_data.score
+        existing.notes = evaluation_data.notes
+        existing.detailed_scores = evaluation_data.detailed_scores
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    # إنشاء تقييم جديد
     evaluation = Evaluation(
         project_id=evaluation_data.project_id,
         admin_id=current_admin["admin_id"],
@@ -67,11 +71,11 @@ async def create_admin_evaluation(
         notes=evaluation_data.notes,
         detailed_scores=evaluation_data.detailed_scores
     )
-    
+
     db.add(evaluation)
     db.commit()
     db.refresh(evaluation)
-    
+
     return evaluation
 
 
@@ -166,8 +170,8 @@ async def create_ai_evaluation(
 ):
     """
     طلب تقييم AI لمشروع
-    - يستخدم OpenAI API لتقييم المشروع
-    - النقاط من 0 إلى 50
+    - يستخدم DeepSeek API لتقييم المشروع
+    - النقاط من 0 إلى 25
     """
     # التحقق من وجود المشروع
     project = db.query(ProjectSubmission).filter(
@@ -297,8 +301,70 @@ async def get_project_evaluations(
     evaluations = db.query(Evaluation).filter(
         Evaluation.project_id == project_id
     ).all()
-    
+
     return evaluations
+
+
+@router.get("/project/{project_id}/details")
+async def get_project_evaluations_with_admins(
+    project_id: int,
+    current_admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    الحصول على جميع تقييمات مشروع مع تفاصيل الإداريين
+    - يمكن لجميع الإداريين رؤية تقييمات بعضهم البعض
+    """
+    project = db.query(ProjectSubmission).filter(
+        ProjectSubmission.id == project_id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+
+    evaluations = db.query(Evaluation).filter(
+        Evaluation.project_id == project_id
+    ).all()
+
+    result = []
+    for eval in evaluations:
+        eval_data = {
+            "id": eval.id,
+            "project_id": eval.project_id,
+            "score": eval.score,
+            "notes": eval.notes,
+            "detailed_scores": eval.detailed_scores,
+            "is_ai_evaluation": eval.is_ai_evaluation,
+            "created_at": eval.created_at.isoformat() if eval.created_at else None,
+            "admin_id": eval.admin_id,
+            "admin_name": None,
+            "admin_weight": None,
+            "is_current_admin": False
+        }
+
+        if eval.admin_id:
+            admin = db.query(Admin).filter(Admin.id == eval.admin_id).first()
+            if admin:
+                eval_data["admin_name"] = admin.full_name
+                eval_data["admin_weight"] = admin.evaluation_weight
+                eval_data["is_current_admin"] = (admin.id == current_admin["admin_id"])
+
+        result.append(eval_data)
+
+    # Get current admin's evaluation if exists
+    current_admin_eval = next(
+        (e for e in result if e["admin_id"] == current_admin["admin_id"]),
+        None
+    )
+
+    return {
+        "project_id": project_id,
+        "project_title": project.title,
+        "evaluations": result,
+        "current_admin_evaluation": current_admin_eval,
+        "total_admin_evaluations": len([e for e in result if not e["is_ai_evaluation"]]),
+        "has_ai_evaluation": any(e["is_ai_evaluation"] for e in result)
+    }
 
 
 @router.get("/project/{project_id}/score")
@@ -327,26 +393,30 @@ async def get_project_final_score(
     admin_evaluations = [e for e in evaluations if not e.is_ai_evaluation]
     
     # حساب متوسط تقييم الإداريين مع الأوزان
+    # كل إداري يعطي تقييم من 75 نقطة
+    # المتوسط المرجح للإداريين يمثل الـ 75% من التقييم النهائي
     if admin_evaluations:
         admin_scores_weighted = []
-        for eval in admin_evaluations:
-            admin = db.query(Admin).filter(Admin.id == eval.admin_id).first()
-            weight = admin.evaluation_weight if admin else 10
+        for evaluation in admin_evaluations:
+            admin = db.query(Admin).filter(Admin.id == evaluation.admin_id).first()
+            weight = admin.evaluation_weight if admin else 100
             admin_scores_weighted.append({
-                "score": eval.score,
+                "score": evaluation.score,
                 "weight": weight
             })
-        
+
         total_weight = sum(a["weight"] for a in admin_scores_weighted)
+        # المتوسط المرجح لتقييمات الإداريين (من 75)
         weighted_admin_score = sum(
             a["score"] * a["weight"] for a in admin_scores_weighted
         ) / total_weight if total_weight > 0 else 0
     else:
         weighted_admin_score = 0
-    
-    # النتيجة النهائية: 75% إداريين + 25% AI
-    final_score = (weighted_admin_score * 0.75) + (ai_score * 0.25)
-    
+
+    # النتيجة النهائية: تقييم الإداريين (من 75) + تقييم AI (من 25) = من 100
+    # التقييمات مقاسة مسبقاً: إداريين من 75، AI من 25
+    final_score = weighted_admin_score + ai_score
+
     return {
         "project_id": project_id,
         "project_title": project.title,
@@ -391,22 +461,24 @@ async def get_top_teams(
         
         if admin_evals:
             admin_scores_weighted = []
-            for eval in admin_evals:
-                admin = db.query(Admin).filter(Admin.id == eval.admin_id).first()
-                weight = admin.evaluation_weight if admin else 10
+            for evaluation in admin_evals:
+                admin = db.query(Admin).filter(Admin.id == evaluation.admin_id).first()
+                weight = admin.evaluation_weight if admin else 100
                 admin_scores_weighted.append({
-                    "score": eval.score,
+                    "score": evaluation.score,
                     "weight": weight
                 })
-            
+
             total_weight = sum(a["weight"] for a in admin_scores_weighted)
+            # المتوسط المرجح لتقييمات الإداريين (من 75)
             weighted_admin_score = sum(
                 a["score"] * a["weight"] for a in admin_scores_weighted
             ) / total_weight if total_weight > 0 else 0
         else:
             weighted_admin_score = 0
-        
-        final_score = (weighted_admin_score * 0.75) + (ai_score * 0.25)
+
+        # النتيجة النهائية: تقييم الإداريين (من 75) + تقييم AI (من 25) = من 100
+        final_score = weighted_admin_score + ai_score
         
         scored_projects.append({
             "project": project,

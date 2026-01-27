@@ -339,7 +339,7 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
         else:
             admin_score += eval.score
     
-    total_score = (admin_score * 0.5) + (ai_score * 0.5) if evaluations else None
+    total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
     
     response = ProjectWithTeamResponse(
         id=project.id,
@@ -435,7 +435,7 @@ async def export_project_pdf(project_id: int, db: Session = Depends(get_db)):
 
     admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
     ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
-    total_score = (admin_score * 0.5) + (ai_score * 0.5) if evaluations else None
+    total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
 
     project_data = {
         "title": project.title,

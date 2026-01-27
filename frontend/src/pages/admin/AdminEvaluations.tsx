@@ -108,7 +108,7 @@ export default function AdminEvaluations() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">تقييم المشاريع</h1>
-          <p className="text-gray-400">تقييم المشاريع المقدمة (50% إداريين + 50% AI)</p>
+          <p className="text-gray-400">تقييم المشاريع المقدمة (75% إداريين + 25% AI)</p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg">
           <Star className="w-5 h-5" />

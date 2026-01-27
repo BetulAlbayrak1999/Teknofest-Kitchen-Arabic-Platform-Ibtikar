@@ -191,7 +191,7 @@ export default function TopTeams() {
                 <Star className="w-4 h-4 text-teknofest-orange" />
               </div>
               <span className="text-gray-300">
-                <span className="text-white font-medium">50%</span> تقييم لجنة التحكيم
+                <span className="text-white font-medium">75%</span> تقييم لجنة التحكيم
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -199,7 +199,7 @@ export default function TopTeams() {
                 <Star className="w-4 h-4 text-teknofest-cyan" />
               </div>
               <span className="text-gray-300">
-                <span className="text-white font-medium">50%</span> تقييم الذكاء الاصطناعي
+                <span className="text-white font-medium">25%</span> تقييم الذكاء الاصطناعي
               </span>
             </div>
           </div>

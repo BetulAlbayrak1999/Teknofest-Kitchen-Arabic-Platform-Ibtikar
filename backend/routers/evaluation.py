@@ -344,8 +344,8 @@ async def get_project_final_score(
     else:
         weighted_admin_score = 0
     
-    # النتيجة النهائية: 50% إداريين + 50% AI
-    final_score = (weighted_admin_score * 0.5) + (ai_score * 0.5)
+    # النتيجة النهائية: 75% إداريين + 25% AI
+    final_score = (weighted_admin_score * 0.75) + (ai_score * 0.25)
     
     return {
         "project_id": project_id,
@@ -406,7 +406,7 @@ async def get_top_teams(
         else:
             weighted_admin_score = 0
         
-        final_score = (weighted_admin_score * 0.5) + (ai_score * 0.5)
+        final_score = (weighted_admin_score * 0.75) + (ai_score * 0.25)
         
         scored_projects.append({
             "project": project,

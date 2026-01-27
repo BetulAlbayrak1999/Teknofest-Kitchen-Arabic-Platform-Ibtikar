@@ -310,7 +310,7 @@ async def export_project_pdf(
     
     admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
     ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
-    total_score = (admin_score * 0.5) + (ai_score * 0.5) if evaluations else None
+    total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
     
     project_data = {
         "title": project.title,
@@ -351,7 +351,7 @@ async def export_all_projects_pdf(
         
         admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
         ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
-        total_score = (admin_score * 0.5) + (ai_score * 0.5) if evaluations else None
+        total_score = (admin_score * 0.75) + (ai_score * 0.25) if evaluations else None
         
         projects_data.append({
             "title": project.title,

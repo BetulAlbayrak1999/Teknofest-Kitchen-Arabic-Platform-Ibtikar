@@ -76,9 +76,9 @@ export default function AdminManagement() {
     }
   }
 
-  // Calculate total weight and percentages
-  const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0)
+  // Calculate total weight and percentages (only non-super admins)
   const nonSuperAdmins = admins.filter(a => !a.is_superadmin)
+  const totalWeight = nonSuperAdmins.reduce((sum, admin) => sum + (weights[admin.id!] || 0), 0)
 
   if (loading) {
     return (

@@ -4,15 +4,17 @@
 import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from database import get_db
 from models import ProjectSubmission, Team, TeamMember, ProgramVersion, Evaluation
 from schemas import (
-    ProjectSubmissionCreate, ProjectSubmissionResponse, 
+    ProjectSubmissionCreate, ProjectSubmissionResponse,
     ProjectWithTeamResponse, ProjectFieldEnum
 )
+from services.pdf_generator import pdf_service
 
 router = APIRouter(prefix="/api/projects", tags=["المشاريع"])
 
@@ -386,16 +388,16 @@ async def search_by_team_name(team_name: str, db: Session = Depends(get_db)):
 async def get_projects_stats(db: Session = Depends(get_db)):
     """إحصائيات المشاريع"""
     version = get_active_program_version(db)
-    
+
     total = db.query(ProjectSubmission).filter(
         ProjectSubmission.program_version_id == version.id
     ).count()
-    
+
     with_attachments = db.query(ProjectSubmission).filter(
         ProjectSubmission.program_version_id == version.id,
         ProjectSubmission.has_attachments == True
     ).count()
-    
+
     # توزيع حسب المجال
     field_distribution = db.query(
         ProjectSubmission.field,
@@ -403,7 +405,7 @@ async def get_projects_stats(db: Session = Depends(get_db)):
     ).filter(
         ProjectSubmission.program_version_id == version.id
     ).group_by(ProjectSubmission.field).all()
-    
+
     return {
         "total_projects": total,
         "with_attachments": with_attachments,
@@ -411,5 +413,120 @@ async def get_projects_stats(db: Session = Depends(get_db)):
         "field_distribution": {
             field: count for field, count in field_distribution
         }
+    }
+
+
+# ==================== تصدير PDF ====================
+
+@router.get("/{project_id}/pdf")
+async def export_project_pdf(project_id: int, db: Session = Depends(get_db)):
+    """تصدير مشروع كـ PDF"""
+    project = db.query(ProjectSubmission).filter(
+        ProjectSubmission.id == project_id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+
+    # حساب التقييم
+    evaluations = db.query(Evaluation).filter(
+        Evaluation.project_id == project_id
+    ).all()
+
+    admin_score = sum(e.score for e in evaluations if not e.is_ai_evaluation)
+    ai_score = sum(e.score for e in evaluations if e.is_ai_evaluation)
+    total_score = (admin_score * 0.5) + (ai_score * 0.5) if evaluations else None
+
+    project_data = {
+        "title": project.title,
+        "team_name": project.team.team_name if project.team else "غير محدد",
+        "field": project.field,
+        "problem_statement": project.problem_statement,
+        "technical_description": project.technical_description,
+        "scientific_reference": project.scientific_reference,
+        "total_score": total_score,
+        "admin_score": admin_score,
+        "ai_score": ai_score
+    }
+
+    pdf_bytes = pdf_service.generate_project_pdf(project_data)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=project_{project_id}.pdf"
+        }
+    )
+
+
+# ==================== خدمة الملفات المرفقة ====================
+
+@router.get("/attachment/{filename}")
+async def get_attachment(filename: str):
+    """الحصول على ملف مرفق"""
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+
+    # تحديد نوع الملف
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    media_types = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'pdf': 'application/pdf',
+        'zip': 'application/zip'
+    }
+    media_type = media_types.get(ext, 'application/octet-stream')
+
+    return FileResponse(
+        filepath,
+        media_type=media_type,
+        filename=filename
+    )
+
+
+@router.get("/{project_id}/attachments")
+async def get_project_attachments(project_id: int, db: Session = Depends(get_db)):
+    """الحصول على قائمة المرفقات لمشروع"""
+    project = db.query(ProjectSubmission).filter(
+        ProjectSubmission.id == project_id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+
+    attachments = []
+
+    if project.image_path:
+        attachments.append({
+            "type": "image",
+            "label": "صورة المشروع",
+            "filename": project.image_path,
+            "url": f"/api/projects/attachment/{project.image_path}"
+        })
+
+    if project.diagram_path:
+        attachments.append({
+            "type": "diagram",
+            "label": "المخطط",
+            "filename": project.diagram_path,
+            "url": f"/api/projects/attachment/{project.diagram_path}"
+        })
+
+    if project.design_path:
+        attachments.append({
+            "type": "design",
+            "label": "التصميم المبدئي",
+            "filename": project.design_path,
+            "url": f"/api/projects/attachment/{project.design_path}"
+        })
+
+    return {
+        "project_id": project_id,
+        "has_attachments": project.has_attachments,
+        "attachments": attachments
     }
     

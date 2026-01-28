@@ -17,21 +17,20 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 email-validator==2.1.0
 
-# Email
+# Email (SMTP)
 aiosmtplib==3.0.1
 
-# PDF Generation
+# PDF Generation (Arabic Support)
 reportlab==4.0.9
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
 
-# AI Evaluation (OpenAI)
+# AI Evaluation (DeepSeek API)
 openai==1.12.0
 httpx==0.26.0
 
 # File Upload
-python-multipart==0.0.6
 aiofiles==23.2.1
 
-# Utilities
+# Environment Variables
 python-dotenv==1.0.0

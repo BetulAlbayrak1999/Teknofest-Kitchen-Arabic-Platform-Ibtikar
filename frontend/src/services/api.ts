@@ -133,6 +133,11 @@ export const individualsService = {
     return response.data
   },
 
+  unassignIndividual: async (individualId: number) => {
+    const response = await api.post(`/students/individuals/${individualId}/unassign`)
+    return response.data
+  },
+
   getTeamsWithSpace: async (): Promise<TeamWithSpace[]> => {
     const response = await api.get('/students/teams-with-space')
     return response.data

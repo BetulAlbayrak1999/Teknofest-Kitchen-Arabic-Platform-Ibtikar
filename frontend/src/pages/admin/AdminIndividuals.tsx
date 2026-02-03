@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Calendar,
   UserCheck,
+  Undo
 } from 'lucide-react'
 import { individualsService } from '../../services/api'
 import { PROJECT_FIELDS, type Individual, type TeamWithSpace } from '../../types'
@@ -204,6 +205,34 @@ export default function AdminIndividuals() {
     }
   }
 
+  const handleUnassignOne = async (individual: Individual) => {
+    const ok = window.confirm(`هل تريد إلغاء فرز ${individual.full_name}؟`)
+    if (!ok) return
+
+    setAssigning(true)
+    try {
+      await individualsService.unassignIndividual(individual.id!)
+      toast.success('تم إلغاء الفرز بنجاح')
+
+      // Refresh data
+      const [individualsData, teamsData] = await Promise.all([
+        individualsService.getAll(),
+        individualsService.getTeamsWithSpace(),
+      ])
+      setIndividuals(individualsData)
+      setTeamsWithSpace(teamsData)
+
+      // Clean selection if needed
+      setSelectedIndividuals((prev) => prev.filter((id) => id !== individual.id))
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail
+      toast.error(typeof detail === 'string' ? detail : 'حدث خطأ أثناء إلغاء الفرز')
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -345,7 +374,7 @@ export default function AdminIndividuals() {
                   >
                     <Eye className="w-5 h-5" />
                   </button>
-                  {!individual.is_assigned && (
+                  {!individual.is_assigned ? (
                     <div
                       onClick={() => toggleSelect(individual.id!)}
                       className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer ${
@@ -358,7 +387,17 @@ export default function AdminIndividuals() {
                         <Check className="w-4 h-4 text-white" />
                       )}
                     </div>
-                  )}
+                  ) : <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleUnassignOne(individual)
+                    }}
+                    title="إلغاء الفرز"
+                    disabled={assigning}
+                    className="p-2 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                  >
+                    <Undo className="w-4 h-4" />
+                  </button>}
                 </div>
               </div>
 

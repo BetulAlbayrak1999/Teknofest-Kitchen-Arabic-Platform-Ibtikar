@@ -454,6 +454,54 @@ async def add_individuals_to_existing_team(
     }
 
 
+@router.post("/individuals/{individual_id}/unassign")
+async def unassign_individual(
+    individual_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    إلغاء فرز فرد من فريقه:
+    - حذف TeamMember من team
+    - assigned_team_id = NULL
+    - is_assigned = False
+    """
+
+    individual = db.query(Individual).filter(Individual.id == individual_id).first()
+    if not individual:
+        raise HTTPException(status_code=404, detail="الفرد غير موجود")
+
+    # إذا كان غير مفرز أصلاً
+    if not individual.is_assigned or not individual.assigned_team_id:
+        return {"message": "الفرد غير مفرز بالفعل"}
+
+    team_id = individual.assigned_team_id
+
+    # حذف العضوية من TeamMember
+    member = db.query(TeamMember).filter(
+        TeamMember.team_id == team_id,
+        TeamMember.email == individual.email,
+        TeamMember.phone == individual.phone
+    ).first()
+
+    if member:
+        was_leader = member.is_leader
+        db.delete(member)
+        db.commit()
+
+        # إذا القائد انحذف، عيّن قائد جديد (اختياري لكن ممتاز)
+        if was_leader:
+            remaining = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
+            if remaining and not any(m.is_leader for m in remaining):
+                remaining[0].is_leader = True
+                db.commit()
+
+    # تحديث حالة الفرد
+    individual.is_assigned = False
+    individual.assigned_team_id = None
+    db.commit()
+
+    return {"message": "تم إلغاء فرز الفرد بنجاح", "team_id": team_id}
+
 # ==================== إرسال رابط تلغرام ====================
 
 class TelegramLinkRequest(BaseModel):

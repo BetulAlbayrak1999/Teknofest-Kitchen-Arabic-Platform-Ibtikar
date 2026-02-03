@@ -11,7 +11,7 @@ import {
   Check,
   Lightbulb,
 } from 'lucide-react'
-import { PROJECT_FIELDS, type TeamMember, type RegistrationType } from '../types'
+import { PROJECT_FIELDS, type TeamMember, type RegistrationType, type Gender} from '../types'
 import { teamsService } from '../services/api'
 
 interface TeamFormData {
@@ -20,6 +20,12 @@ interface TeamFormData {
   field: string
   initial_idea?: string
   members: TeamMember[]
+  gender: Gender
+}
+
+const GENDER_LABELS: Record<Gender, string> = {
+  male: 'ذكور',
+  female: 'إناث',
 }
 
 export default function TeamRegistration() {
@@ -37,6 +43,7 @@ export default function TeamRegistration() {
     formState: { errors },
   } = useForm<TeamFormData>({
     defaultValues: {
+      gender: 'male',
       members: [
         { full_name: '', email: '', phone: '', is_leader: true },
         { full_name: '', email: '', phone: '', is_leader: false },
@@ -67,6 +74,7 @@ export default function TeamRegistration() {
         field: data.field,
         initial_idea: hasIdea ? data.initial_idea : null,
         members: membersWithLeader,
+        gender: data.gender,
       }
       await teamsService.create(teamData as any)
       toast.success('تم تسجيل الفريق بنجاح!')
@@ -211,6 +219,22 @@ export default function TeamRegistration() {
                   />
                   {errors.team_name && (
                     <p className="text-red-400 text-sm mt-1">{errors.team_name.message}</p>
+                  )}
+                </div>
+                
+                {/* Team Gender */}
+                <div>
+                  <label className="block text-white font-medium mb-2">الجنس *</label>
+                  <select
+                    {...register('gender', { required: 'يرجى اختيار جنس الفريق' })}
+                    className="input-field"
+                  >
+                    <option value="male">{GENDER_LABELS.male}</option>
+                    <option value="female">{GENDER_LABELS.female}</option>
+                  </select>
+
+                  {errors.gender && (
+                    <p className="text-red-400 text-sm mt-1">{errors.gender.message as string}</p>
                   )}
                 </div>
 

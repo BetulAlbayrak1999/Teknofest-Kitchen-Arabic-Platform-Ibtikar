@@ -291,4 +291,11 @@ export const statsService = {
   },
 }
 
+export const iForgotService = {
+  verifyMembershipNumber: async (membershipNumber: string) => {
+    const response = await api.get(`/students/verify-membership-number/${membershipNumber}`)
+    return response.data
+  }
+}
+
 export default api

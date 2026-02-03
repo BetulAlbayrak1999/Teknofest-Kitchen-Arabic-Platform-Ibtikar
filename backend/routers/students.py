@@ -15,6 +15,7 @@ from schemas import (
     AssignIndividualsToTeam
 )
 from services.email_service import email_service
+from services.iforgot_service import iForgotService
 
 router = APIRouter(prefix="/api/students", tags=["المشاركون"])
 
@@ -568,6 +569,20 @@ async def send_telegram_link_to_team(
 
     return results
 
+# ==================== iforgot service ====================
+@router.get("/verify-membership-number/{membership_number}")
+def verify_membership_number(membership_number: str):
+    try:
+        member_data = iForgotService.get_by_membership_number(membership_number)
+        print(member_data)
+        if not member_data['success']:
+            return {"message": "رقم العضوية غير موجود"}
+        return member_data
+        
+    except Exception as e:
+        return {
+            "message": "فشل التحقق من رقم العضوية: " + str(e)
+        }
 
 def create_telegram_email_template(recipient_name: str, telegram_link: str) -> str:
     """إنشاء قالب البريد لدعوة تلغرام"""

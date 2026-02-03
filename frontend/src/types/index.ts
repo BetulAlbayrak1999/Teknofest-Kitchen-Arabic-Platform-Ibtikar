@@ -56,6 +56,7 @@ export interface TeamMember {
   is_leader: boolean
   team_id?: number
   created_at?: string
+  membership_number?: string
 }
 
 // Team

@@ -25,6 +25,8 @@ export type ProjectField =
   | 'مسابقة تطبيقات نماذج اللغة الضخمة'
   | 'مسابقة تقنيات أنظمة الدفاع الجويّة'
 
+export type Gender = 'male' | 'female'
+
 export const PROJECT_FIELDS: { value: ProjectField; label: string; labelEn: string }[] = [
   { value: 'مسابقة التنقل الذكي', label: 'مسابقة التنقل الذكي', labelEn: 'Smart Mobility Competition' },
   { value: 'مسابقة ابتكار التكنولوجيا الحيوية', label: 'مسابقة ابتكار التكنولوجيا الحيوية', labelEn: 'Biotechnology Innovation Competition' },
@@ -67,6 +69,7 @@ export interface Team {
   is_active?: boolean
   created_at?: string
   members: TeamMember[]
+  gender: Gender
 }
 
 // Individual
@@ -84,6 +87,7 @@ export interface Individual {
   assigned_team_id?: number
   is_assigned?: boolean
   created_at?: string
+  gender: Gender
 }
 
 // Project Submission Create (using email to find team)
@@ -191,4 +195,5 @@ export interface TeamWithSpace {
     email: string
     is_leader: boolean
   }[]
+  gender: Gender
 }

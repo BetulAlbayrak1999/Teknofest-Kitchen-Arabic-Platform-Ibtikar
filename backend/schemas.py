@@ -35,6 +35,9 @@ class ProjectFieldEnum(str, Enum):
     LLM_APPLICATIONS = "مسابقة تطبيقات نماذج اللغة الضخمة"
     AIR_DEFENSE = "مسابقة تقنيات أنظمة الدفاع الجويّة"
 
+class GenderEnum(str, Enum):
+    male = "male"
+    female = "female"
 
 # ================== مخططات أعضاء الفريق ==================
 
@@ -65,7 +68,8 @@ class TeamCreate(BaseModel):
     field: ProjectFieldEnum
     initial_idea: Optional[str] = None  # مطلوب للسيناريو 1
     members: List[TeamMemberCreate] = Field(..., min_items=3, max_items=6)
-    
+    gender: GenderEnum
+
     @validator('members')
     def validate_members(cls, v):
         if len(v) < 3 or len(v) > 6:
@@ -96,6 +100,7 @@ class TeamResponse(BaseModel):
     is_active: bool
     created_at: datetime
     members: List[TeamMemberResponse] = []
+    gender: GenderEnum
     
     class Config:
         from_attributes = True
@@ -114,6 +119,7 @@ class IndividualCreate(BaseModel):
     experience_level: str
     preferred_field: ProjectFieldEnum
     project_idea: Optional[str] = None  # مطلوب للسيناريو 2
+    gender: GenderEnum
     
     @validator('project_idea')
     def validate_idea(cls, v, values):
@@ -137,6 +143,7 @@ class IndividualResponse(BaseModel):
     assigned_team_id: Optional[int]
     is_assigned: bool
     created_at: datetime
+    gender: GenderEnum
     
     class Config:
         from_attributes = True
@@ -284,6 +291,7 @@ class AssignIndividualsToTeam(BaseModel):
     individual_ids: List[int] = Field(..., min_items=3, max_items=6)
     team_name: str = Field(..., min_length=2, max_length=100)
     field: ProjectFieldEnum
+    gender: GenderEnum
 
 
 # ================== مخططات أفضل الفرق ==================

@@ -75,7 +75,8 @@ async def register_team(team_data: TeamCreate, db: Session = Depends(get_db)):
         registration_type=RegistrationType(team_data.registration_type.value),
         field=team_data.field.value,
         initial_idea=team_data.initial_idea,
-        program_version_id=version.id
+        program_version_id=version.id,
+        gender=team_data.gender.value
     )
     
     db.add(team)
@@ -169,7 +170,8 @@ async def register_individual(
         experience_level=individual_data.experience_level,
         preferred_field=individual_data.preferred_field.value,
         project_idea=individual_data.project_idea,
-        program_version_id=version.id
+        program_version_id=version.id,
+        gender=individual_data.gender.value
     )
     
     db.add(individual)
@@ -293,6 +295,7 @@ async def get_teams_with_space(db: Session = Depends(get_db)):
             teams_with_space.append({
                 "id": team.id,
                 "team_name": team.team_name,
+                "gender": team.gender.value if team.gender else None,
                 "field": team.field,
                 "member_count": member_count,
                 "available_slots": 6 - member_count,
@@ -328,12 +331,21 @@ async def assign_individuals_to_team(
             detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
         )
 
+    genders = {ind.gender for ind in individuals}
+    if None in genders:
+        raise HTTPException(status_code=400, detail="بعض الأفراد لا يملكون جنساً محدداً")
+    if len(genders) != 1:
+        raise HTTPException(status_code=400, detail="لا يمكن إنشاء فريق من أفراد بجنسين مختلفين")
+
+    team_gender = genders.pop()
+
     # الحصول على نسخة البرنامج
     version = get_active_program_version(db)
 
     # إنشاء فريق جديد
     team = Team(
         team_name=assignment.team_name,
+        gender=team_gender,
         registration_type=RegistrationType.TEAM_NO_IDEA,
         field=assignment.field.value,
         program_version_id=version.id
@@ -401,6 +413,20 @@ async def add_individuals_to_existing_team(
             status_code=400,
             detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
         )
+    
+    genders = {ind.gender for ind in individuals}
+    if None in genders:
+        raise HTTPException(status_code=400, detail="بعض الأفراد لا يملكون جنساً محدداً")
+
+    # إذا الفريق قديم بدون جنس: اسمح فقط إذا كل الأفراد نفس الجنس ثم ثبّت جنس الفريق
+    if not team.gender:
+        if len(genders) != 1:
+            raise HTTPException(status_code=400, detail="لا يمكن تحديد جنس الفريق لأن الأفراد بجنسين مختلفين")
+        team.gender = list(genders)[0]
+    else:
+        # الفريق له جنس: لازم كل الأفراد نفس الجنس
+        if any(ind.gender != team.gender for ind in individuals):
+            raise HTTPException(status_code=400, detail="لا يمكن إضافة أفراد بجنس مختلف عن جنس الفريق")
 
     # إضافة الأعضاء
     for ind in individuals:

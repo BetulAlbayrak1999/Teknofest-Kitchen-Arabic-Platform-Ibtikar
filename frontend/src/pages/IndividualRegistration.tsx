@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { User, Lightbulb, Users, Check, ChevronLeft, ChevronRight } from 'lucide-react'
-import { PROJECT_FIELDS, type Individual, type RegistrationType } from '../types'
+import { PROJECT_FIELDS, type Individual, type RegistrationType, type Gender } from '../types'
 import { individualsService } from '../services/api'
 
 interface IndividualFormData {
@@ -15,6 +15,12 @@ interface IndividualFormData {
   experience_level: string
   preferred_field: string
   project_idea?: string
+  gender: Gender
+}
+
+const GENDER_LABELS: Record<Gender, string> = {
+  male: 'ذكر',
+  female: 'أنثى',
 }
 
 const experienceLevels = [
@@ -35,7 +41,9 @@ export default function IndividualRegistration() {
     handleSubmit,
     trigger,
     formState: { errors },
-  } = useForm<IndividualFormData>()
+  } = useForm<IndividualFormData>({
+    defaultValues: { gender: 'male' },
+  })
 
   const onSubmit = async (data: IndividualFormData) => {
     setIsSubmitting(true)
@@ -48,6 +56,7 @@ export default function IndividualRegistration() {
         ...data,
         registration_type: registrationType,
         preferred_field: data.preferred_field as any,
+        gender: data.gender,
       }
 
       await individualsService.create(individualData)
@@ -203,6 +212,22 @@ export default function IndividualRegistration() {
                   />
                   {errors.phone && (
                     <p className="text-red-400 text-sm mt-1">{errors.phone.message}</p>
+                  )}
+                </div>
+                
+                {/* Gender */}
+                <div>
+                  <label className="block text-white font-medium mb-2">الجنس *</label>
+                  <select
+                    {...register('gender', { required: 'يرجى اختيار الجنس' })}
+                    className="input-field"
+                  >
+                    <option value="male">{GENDER_LABELS.male}</option>
+                    <option value="female">{GENDER_LABELS.female}</option>
+                  </select>
+
+                  {errors.gender && (
+                    <p className="text-red-400 text-sm mt-1">{errors.gender.message as string}</p>
                   )}
                 </div>
 

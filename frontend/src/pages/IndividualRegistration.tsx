@@ -54,21 +54,32 @@ export default function IndividualRegistration() {
   const verifyMembershipNumber = async (membershipNumber: string) => {
     if (!membershipNumber) {
       setMembershipStatus(null)
+
+      const wasAutofilled = !!memberData
       setMemberData(null)
-      setValue('full_name', '')
-      setValue('email', '')
-      setValue('phone', '')
+
+      if (wasAutofilled) {
+        setValue('full_name', '')
+        setValue('email', '')
+        setValue('phone', '')
+      }
       return
     }
 
     if (membershipNumber.length !== 7) {
       setMembershipStatus('invalid')
+
+      const wasAutofilled = !!memberData
       setMemberData(null)
-      setValue('full_name', '')
-      setValue('email', '')
-      setValue('phone', '')
+
+      if (wasAutofilled) {
+        setValue('full_name', '')
+        setValue('email', '')
+        setValue('phone', '')
+      }
       return
     }
+      
 
     const requestId = Date.now()
     membershipRequestId.current = requestId
@@ -134,7 +145,8 @@ export default function IndividualRegistration() {
 
 
   const onSubmit = async (data: IndividualFormData) => {
-    if (membershipStatus !== 'valid') {
+    const hasMembership = !!data.membership_number?.trim()
+    if (hasMembership && membershipStatus !== 'valid') {
       toast.error('يرجى إدخال رقم عضوية صحيح')
       return
     }
@@ -257,9 +269,7 @@ export default function IndividualRegistration() {
                   <label className="block text-white font-medium mb-2">رقم العضوية *</label>
                   <input
                     {...register('membership_number', {
-                      required: 'رقم العضوية مطلوب',
-                      minLength: { value: 7, message: 'رقم العضوية يجب أن يكون 7 أرقام' },
-                      maxLength: { value: 7, message: 'رقم العضوية يجب أن يكون 7 أرقام' },
+                      validate: (v) => !v || v.length === 7 || 'رقم العضوية يجب أن يكون 7 أرقام',
                     })}
                     type="text"
                     className="input-field"
@@ -353,7 +363,7 @@ export default function IndividualRegistration() {
                   )}
                 </div>
                 
-                {/* Gender 
+                {membershipStatus !== 'valid' && (
                 <div>
                   <label className="block text-white font-medium mb-2">الجنس *</label>
                   <select
@@ -367,7 +377,8 @@ export default function IndividualRegistration() {
                   {errors.gender && (
                     <p className="text-red-400 text-sm mt-1">{errors.gender.message as string}</p>
                   )}
-                </div>*/}
+                </div>
+              )}
 
                 {/* Experience Level */}
                 <div>
@@ -401,7 +412,10 @@ export default function IndividualRegistration() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const isValid = await trigger(['full_name', 'email', 'phone', 'experience_level'])
+                    const fieldsToValidate: any = ['full_name', 'email', 'phone', 'experience_level']
+                    if (membershipStatus !== 'valid') fieldsToValidate.push('gender')
+
+                    const isValid = await trigger(fieldsToValidate)
                     if (isValid) {
                       setStep(3)
                     }

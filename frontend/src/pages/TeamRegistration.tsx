@@ -52,6 +52,7 @@ export default function TeamRegistration() {
     formState: { errors },
   } = useForm<TeamFormData>({
     defaultValues: {
+      gender: 'male',
       members: [
         { full_name: '', membership_number: '', email: '', phone: '', is_leader: true },
         { full_name: '', membership_number: '', email: '', phone: '', is_leader: false },
@@ -67,25 +68,28 @@ export default function TeamRegistration() {
 
   const onSubmit = async (data: TeamFormData) => {
     if (isSubmitting) return
-    const { isValid, teamGender } = validateTeamGender()
 
-    const allMembersValid = fields.every((_, index) => 
-      membershipStatus[index] === 'valid'
-    )
-  
-    const invalidMemberIndices = fields
-    .map((_, index) => ({ index, valid: membershipStatus[index] === 'valid' }))
-    .filter(m => !m.valid)
-    .map(m => m.index + 1)
+    // ✅ gender check: team gender (selected) must match any verified member gender from API
+    const { isValid, mismatches } = validateTeamGender(data.gender, data.members)
 
-    if (!allMembersValid) {
+    // ✅ membership number is OPTIONAL:
+    // only members who entered a membership number must be verified as "valid"
+    const invalidMemberIndices = data.members
+      .map((m, index) => ({
+        index,
+        hasMembership: !!m.membership_number?.trim(),
+        isValid: membershipStatus[index] === 'valid',
+      }))
+      .filter((x) => x.hasMembership && !x.isValid)
+      .map((x) => x.index + 1)
+
+    if (invalidMemberIndices.length > 0) {
       toast.error(`يرجى التحقق من رقم العضوية للعضو رقم: ${invalidMemberIndices.join(', ')}`)
       return
     }
 
-
-    if (!isValid || !teamGender) {
-      toast.error('جميع أعضاء الفريق يجب أن يكونوا من نفس الجنس')
+    if (!isValid) {
+      toast.error(`جنس العضو لا يطابق جنس الفريق. الأعضاء: ${mismatches.join(', ')}`)
       return
     }
 
@@ -106,8 +110,9 @@ export default function TeamRegistration() {
         field: data.field,
         initial_idea: hasIdea ? data.initial_idea : null,
         members: membersWithLeader,
-        gender: teamGender,
+        gender: data.gender,
       }
+
       await teamsService.create(teamData as any)
       toast.success('تم تسجيل الفريق بنجاح!')
       navigate('/')
@@ -117,6 +122,7 @@ export default function TeamRegistration() {
       setIsSubmitting(false)
     }
   }
+
 
   const addMember = () => {
     if (fields.length < 6) {
@@ -156,22 +162,19 @@ export default function TeamRegistration() {
     }
   }
 
-  const validateTeamGender = (): { isValid: boolean; teamGender: Gender | null } => {
-    const totalMembers = fields.length
-    const genders = Object.values(memberGenders).filter(g => g !== null) as Gender[]
-    
-    if (genders.length !== totalMembers) {
-      return { isValid: false, teamGender: null }
-    }
-    
-    const firstGender = genders[0]
-    const allSameGender = genders.every(g => g === firstGender)
-    
-    return { 
-      isValid: allSameGender, 
-      teamGender: allSameGender ? firstGender : null 
-    }
+  const validateTeamGender = (teamGender: Gender, members: TeamMember[]) => {
+    const mismatches = members
+      .map((m, i) => {
+        const apiGender = memberGenders[i]
+        const usesApi = !!m.membership_number && membershipStatus[i] === 'valid'
+        const mismatch = usesApi && apiGender && apiGender !== teamGender
+        return mismatch ? i + 1 : null
+      })
+      .filter(Boolean) as number[]
+
+    return { isValid: mismatches.length === 0, mismatches }
   }
+
 
   const handleNextStep = async () => {
     // Validate step 2 fields before proceeding
@@ -189,26 +192,36 @@ export default function TeamRegistration() {
   const verifyMembershipNumber = async (membershipNumber: string, index: number) => {
     if (!membershipNumber) {
       setMembershipStatus(prev => ({ ...prev, [index]: null }))
-      setMemberData(prev => ({ ...prev, [index]: null }))
       setMemberGenders(prev => ({ ...prev, [index]: null }))
 
-      setValue(`members.${index}.full_name`, '')
-      setValue(`members.${index}.email`, '')
-      setValue(`members.${index}.phone`, '')
+      const wasAutofilled = !!memberData[index]
+      setMemberData(prev => ({ ...prev, [index]: null }))
+
+      if (wasAutofilled) {
+        setValue(`members.${index}.full_name`, '')
+        setValue(`members.${index}.email`, '')
+        setValue(`members.${index}.phone`, '')
+      }
       return
     }
+
 
     if (membershipNumber.length !== 7) {
       setMembershipStatus(prev => ({ ...prev, [index]: 'invalid' }))
       setVerifyingMembership(prev => ({ ...prev, [index]: false }))
-      setMemberData(prev => ({ ...prev, [index]: null }))
       setMemberGenders(prev => ({ ...prev, [index]: null }))
 
-      setValue(`members.${index}.full_name`, '')
-      setValue(`members.${index}.email`, '')
-      setValue(`members.${index}.phone`, '')
+      const wasAutofilled = !!memberData[index]
+      setMemberData(prev => ({ ...prev, [index]: null }))
+
+      if (wasAutofilled) {
+        setValue(`members.${index}.full_name`, '')
+        setValue(`members.${index}.email`, '')
+        setValue(`members.${index}.phone`, '')
+      }
       return
     }
+
 
     const requestId = Date.now()
     membershipRequestIds.current[index] = requestId
@@ -412,6 +425,22 @@ export default function TeamRegistration() {
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-white font-medium mb-2">جنس الفريق *</label>
+                  <select
+                    {...register('gender', { required: 'يرجى اختيار جنس الفريق' })}
+                    className="input-field"
+                    defaultValue="male"
+                  >
+                    <option value="male">{GENDER_LABELS.male}</option>
+                    <option value="female">{GENDER_LABELS.female}</option>
+                  </select>
+                  {errors.gender && (
+                    <p className="text-red-400 text-sm mt-1">{errors.gender.message as string}</p>
+                  )}
+                </div>
+
+
                 {/* Competition Field */}
                 <div>
                   <label className="block text-white font-medium mb-2">مجال المسابقة *</label>
@@ -484,22 +513,29 @@ export default function TeamRegistration() {
 
               {/* Gender validation warning */}
               {(() => {
-                const { isValid, teamGender } = validateTeamGender()
-                const hasMembers = Object.values(memberGenders).some(g => g !== null)
-                
-                if (hasMembers && !isValid) {
+                const result = validateTeamGender(
+                  (control._formValues?.gender as Gender) || 'male',
+                  control._formValues?.members || []
+                )
+
+                const hasAnyVerifiedMember = Object.values(memberGenders).some(g => g !== null)
+
+                if (hasAnyVerifiedMember && !result.isValid) {
                   return (
                     <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
                       <div className="flex items-center gap-2 text-red-400">
                         <XCircle className="w-5 h-5" />
                         <p className="text-sm font-medium">
-                          تحذير: جميع أعضاء الفريق يجب أن يكونوا من نفس الجنس
+                          جنس العضو لا يطابق جنس الفريق. الأعضاء: {result.mismatches.join(', ')}
                         </p>
                       </div>
                     </div>
                   )
                 }
-                
+                return null
+              })()}
+
+              {/*
                 // if (hasMembers && isValid && teamGender) {
                 //   return (
                 //     <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
@@ -512,9 +548,7 @@ export default function TeamRegistration() {
                 //     </div>
                 //   )
                 // }
-                
-                return null
-              })()}     
+ */}
 
               <div className="space-y-4">
                 {fields.map((field, index) => (
@@ -561,10 +595,9 @@ export default function TeamRegistration() {
                         <div className="relative">
                           <input
                             {...register(`members.${index}.membership_number`, {
-                              required: 'رقم العضوية مطلوب',
-                              minLength: { value: 7, message: 'رقم العضوية يجب أن يكون 7 أرقام' },
-                              maxLength: { value: 7, message: 'رقم العضوية يجب أن يكون 7 أرقام' },
-                            })}
+                              validate: (v) =>
+                                !v || v.length === 7 || 'رقم العضوية يجب أن يكون 7 أرقام',
+                              })}
                             type="text"
                             className="input-field"
                             placeholder="رقم العضوية"
@@ -688,11 +721,18 @@ export default function TeamRegistration() {
                 </button>
                 <button
                   type="submit"
-                  disabled={  
-                    isSubmitting || 
-                    !validateTeamGender().isValid ||
-                    !fields.every((_, index) => membershipStatus[index] === 'valid')
+                  disabled={
+                  isSubmitting ||
+                  !validateTeamGender(
+                    (control._formValues?.gender as Gender) || 'male',
+                    control._formValues?.members || []
+                  ).isValid ||
+                  (control._formValues?.members || []).some((m: any, index: number) => {
+                    const has = !!m?.membership_number?.trim()
+                    return has && membershipStatus[index] !== 'valid'
+                  })
                   }
+
                   className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                   {isSubmitting ? (

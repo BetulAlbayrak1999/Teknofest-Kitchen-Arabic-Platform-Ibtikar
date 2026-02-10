@@ -127,7 +127,7 @@ class TeamMember(Base):
     email = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
     is_leader = Column(Boolean, default=False)  # مشرف الفريق
-    membership_number = Column(String(50), nullable=False)  # رقم العضوية إن وجد
+    membership_number = Column(String(50), nullable=True)  # رقم العضوية إن وجد
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # العلاقات
@@ -145,7 +145,7 @@ class Individual(Base):
     
     # البيانات الشخصية
     full_name = Column(String(100), nullable=False)
-    membership_number = Column(String(50), nullable=False)  # رقم العضوية إن وجد
+    membership_number = Column(String(50), nullable=True)  # رقم العضوية إن وجد
     email = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
     gender = Column(Enum(Gender, name="gender_enum"), nullable=False, index=True) # gender of individual

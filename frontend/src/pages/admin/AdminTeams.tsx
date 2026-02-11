@@ -3,7 +3,6 @@ import toast from 'react-hot-toast'
 import {
   Users,
   Search,
-  Mail,
   Send,
   Loader2,
   ChevronDown,

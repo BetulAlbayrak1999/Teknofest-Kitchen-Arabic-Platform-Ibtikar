@@ -12,10 +12,9 @@ import {
   Lightbulb,
   CheckCircle2,
   XCircle,
-  Loader2,
 } from 'lucide-react'
 import { PROJECT_FIELDS, type TeamMember, type RegistrationType, type Gender} from '../types'
-import api, { iForgotService, teamsService } from '../services/api'
+import { iForgotService, teamsService } from '../services/api'
 
 interface TeamFormData {
   team_name: string

@@ -1,0 +1,38 @@
+name: (master) [frontend] Frontend Deployment
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-master.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Wrangler CLI
+        run: npm install -g wrangler
+
+      - name: Build the frontend
+        run: npm run build
+
+      - name: Deploy to production
+        run: |
+          wrangler deploy

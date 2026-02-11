@@ -32,6 +32,8 @@ jobs:
         run: npm install -g wrangler
 
       - name: Build the frontend
+        env:
+          VITE_API_TARGET: ${{ vars.VITE_API_TARGET }}
         run: npm run build
 
       - name: Deploy to production

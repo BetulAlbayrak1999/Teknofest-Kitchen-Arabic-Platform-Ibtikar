@@ -19,7 +19,7 @@ jobs:
             docker pull postgres:latest
             docker stop tk-kitchen-db || true
             docker rm tk-kitchen-db || true
-            docker run -d --name tk-kitchen-db -e POSTGRES_USER=tk_kitchen_user -e POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} -e POSTGRES_DB=tk_kitchen_db -p 5432:5432 postgres:latest
+            docker run -d --name tk-kitchen-db -e POSTGRES_USER=tk_kitchen_user -e POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} -e POSTGRES_DB=tk_kitchen_db -p 9681:5432 postgres:latest
             docker network create tk-kitchen
             docker network connect tk-kitchen tk-kitchen-db
           EOF

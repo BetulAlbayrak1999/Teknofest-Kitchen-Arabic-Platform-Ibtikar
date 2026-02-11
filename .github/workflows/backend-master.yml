@@ -52,5 +52,5 @@ jobs:
             docker rm tk-kitchen-be || true
             docker build -t tk-kitchen-be . && docker run -d --name tk-kitchen-be --env-file .env -p 9680:9680 tk-kitchen-be
             docker network create tk-kitchen
-            docker connect tk-kitchen tk-kitchen-be
+            docker network connect tk-kitchen tk-kitchen-be
           EOF

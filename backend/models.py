@@ -42,6 +42,10 @@ class ProjectField(enum.Enum):
     AIR_DEFENSE = "مسابقة تقنيات أنظمة الدفاع الجويّة"
 
 
+class Gender(enum.Enum):
+    male = "male"
+    female = "female"
+
 # ================== نموذج نسخة البرنامج ==================
 
 class ProgramVersion(Base):
@@ -92,7 +96,7 @@ class Team(Base):
     team_name = Column(String(100), nullable=False)
     registration_type = Column(Enum(RegistrationType), nullable=False)
     field = Column(String(100), nullable=False)  # المجال المختار - استخدام String بدلاً من Enum
-    
+    gender = Column(Enum(Gender, name="gender_enum"), nullable=False, index=True) # gender of team
     # معلومات فكرة المشروع (للفرق التي لديها فكرة)
     initial_idea = Column(Text)  # وصف أولي للفكرة
     
@@ -123,7 +127,7 @@ class TeamMember(Base):
     email = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
     is_leader = Column(Boolean, default=False)  # مشرف الفريق
-    
+    membership_number = Column(String(50), nullable=True)  # رقم العضوية إن وجد
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # العلاقات
@@ -141,8 +145,10 @@ class Individual(Base):
     
     # البيانات الشخصية
     full_name = Column(String(100), nullable=False)
+    membership_number = Column(String(50), nullable=True)  # رقم العضوية إن وجد
     email = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
+    gender = Column(Enum(Gender, name="gender_enum"), nullable=False, index=True) # gender of individual
     
     # الخبرات والمهارات
     technical_skills = Column(Text)  # المهارات التقنية

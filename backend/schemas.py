@@ -35,6 +35,9 @@ class ProjectFieldEnum(str, Enum):
     LLM_APPLICATIONS = "مسابقة تطبيقات نماذج اللغة الضخمة"
     AIR_DEFENSE = "مسابقة تقنيات أنظمة الدفاع الجويّة"
 
+class GenderEnum(str, Enum):
+    male = "male"
+    female = "female"
 
 # ================== مخططات أعضاء الفريق ==================
 
@@ -43,6 +46,7 @@ class TeamMemberCreate(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     phone: str = Field(..., min_length=10, max_length=20)
+    membership_number: Optional[str] = Field(None)  # رقم العضوية إن وجد
     is_leader: bool = False
 
 
@@ -65,7 +69,8 @@ class TeamCreate(BaseModel):
     field: ProjectFieldEnum
     initial_idea: Optional[str] = None  # مطلوب للسيناريو 1
     members: List[TeamMemberCreate] = Field(..., min_items=3, max_items=6)
-    
+    gender: GenderEnum
+
     @validator('members')
     def validate_members(cls, v):
         if len(v) < 3 or len(v) > 6:
@@ -96,6 +101,7 @@ class TeamResponse(BaseModel):
     is_active: bool
     created_at: datetime
     members: List[TeamMemberResponse] = []
+    gender: GenderEnum
     
     class Config:
         from_attributes = True
@@ -107,6 +113,7 @@ class IndividualCreate(BaseModel):
     """إنشاء فرد - سيناريو 2 و 3"""
     registration_type: RegistrationTypeEnum
     full_name: str = Field(..., min_length=2, max_length=100)
+    membership_number: Optional[str] = Field(None)  # رقم العضوية إن وجد
     email: EmailStr
     phone: str = Field(..., min_length=10, max_length=20)
     technical_skills: str = Field(..., min_length=10)
@@ -114,6 +121,7 @@ class IndividualCreate(BaseModel):
     experience_level: str
     preferred_field: ProjectFieldEnum
     project_idea: Optional[str] = None  # مطلوب للسيناريو 2
+    gender: GenderEnum
     
     @validator('project_idea')
     def validate_idea(cls, v, values):
@@ -126,6 +134,7 @@ class IndividualResponse(BaseModel):
     """استجابة الفرد"""
     id: int
     registration_type: RegistrationTypeEnum
+    membership_number: Optional[str]
     full_name: str
     email: str
     phone: str
@@ -137,6 +146,7 @@ class IndividualResponse(BaseModel):
     assigned_team_id: Optional[int]
     is_assigned: bool
     created_at: datetime
+    gender: GenderEnum
     
     class Config:
         from_attributes = True
@@ -284,6 +294,7 @@ class AssignIndividualsToTeam(BaseModel):
     individual_ids: List[int] = Field(..., min_items=3, max_items=6)
     team_name: str = Field(..., min_length=2, max_length=100)
     field: ProjectFieldEnum
+    gender: Optional[GenderEnum] = None
 
 
 # ================== مخططات أفضل الفرق ==================

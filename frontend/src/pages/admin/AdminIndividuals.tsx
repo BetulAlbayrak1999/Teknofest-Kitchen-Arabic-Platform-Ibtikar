@@ -16,12 +16,16 @@ import {
   Lightbulb,
   Calendar,
   UserCheck,
+  Undo
 } from 'lucide-react'
 import { individualsService } from '../../services/api'
 import { PROJECT_FIELDS, type Individual, type TeamWithSpace } from '../../types'
 
 type AssignMode = 'new' | 'existing'
-
+const GENDER_LABELS = {
+  male: 'ذكر',
+  female: 'أنثى',
+}
 export default function AdminIndividuals() {
   const [individuals, setIndividuals] = useState<Individual[]>([])
   const [teamsWithSpace, setTeamsWithSpace] = useState<TeamWithSpace[]>([])
@@ -37,6 +41,7 @@ export default function AdminIndividuals() {
   const [assignMode, setAssignMode] = useState<AssignMode>('new')
   const [assigning, setAssigning] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unassigned' | 'assigned'>('all')
+  const [genderFilter, setGenderFilter] = useState<'all' | 'male' | 'female'>('all')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,21 +61,45 @@ export default function AdminIndividuals() {
 
     fetchData()
   }, [])
-
+  
+  useEffect(() => {
+    setSelectedIndividuals([])
+  }, [genderFilter])
+  
   const filteredIndividuals = individuals.filter((ind) => {
     const matchesSearch =
       ind.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ind.email.toLowerCase().includes(searchTerm.toLowerCase())
 
-    if (filter === 'unassigned') return matchesSearch && !ind.is_assigned
-    if (filter === 'assigned') return matchesSearch && ind.is_assigned
-    return matchesSearch
+    const matchesAssignFilter =
+      filter === 'all' ||
+      (filter === 'unassigned' && !ind.is_assigned) ||
+      (filter === 'assigned' && ind.is_assigned)
+
+    const matchesGender =
+      genderFilter === 'all' || ind.gender === genderFilter
+
+    return matchesSearch && matchesAssignFilter && matchesGender
   })
 
+
   const toggleSelect = (id: number) => {
-    setSelectedIndividuals((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    )
+    const ind = individuals.find((i) => i.id === id)
+    if (!ind) return
+
+    setSelectedIndividuals((prev) => {
+      // if selecting (not removing)
+      if (!prev.includes(id)) {
+        const selected = individuals.filter((i) => prev.includes(i.id!))
+        const genders = new Set(selected.map((i) => i.gender))
+        // if there is already a gender selected and new one differs -> block
+        if (genders.size === 1 && Array.from(genders)[0] !== ind.gender) {
+          toast.error('لا يمكن اختيار أفراد من جنسين مختلفين')
+          return prev
+        }
+      }
+      return prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    })
   }
 
   const openDetailModal = (individual: Individual) => {
@@ -176,6 +205,34 @@ export default function AdminIndividuals() {
     }
   }
 
+  const handleUnassignOne = async (individual: Individual) => {
+    const ok = window.confirm(`هل تريد إلغاء فرز ${individual.full_name}؟`)
+    if (!ok) return
+
+    setAssigning(true)
+    try {
+      await individualsService.unassignIndividual(individual.id!)
+      toast.success('تم إلغاء الفرز بنجاح')
+
+      // Refresh data
+      const [individualsData, teamsData] = await Promise.all([
+        individualsService.getAll(),
+        individualsService.getTeamsWithSpace(),
+      ])
+      setIndividuals(individualsData)
+      setTeamsWithSpace(teamsData)
+
+      // Clean selection if needed
+      setSelectedIndividuals((prev) => prev.filter((id) => id !== individual.id))
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail
+      toast.error(typeof detail === 'string' ? detail : 'حدث خطأ أثناء إلغاء الفرز')
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -240,7 +297,19 @@ export default function AdminIndividuals() {
             </button>
           ))}
         </div>
+              <div>
+        <select
+          value={genderFilter}
+          onChange={(e) => setGenderFilter(e.target.value as 'all' | 'male' | 'female')}
+          className="input-field"
+        >
+          <option value="all">كلا الجنسين</option>
+          <option value="male">ذكور فقط</option>
+          <option value="female">إناث فقط</option>
+        </select>
       </div>
+      </div>
+
 
       {/* Teams with space info */}
       {teamsWithSpace.length > 0 && (
@@ -280,7 +349,7 @@ export default function AdminIndividuals() {
                     className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                       individual.is_assigned
                         ? 'bg-green-500/20'
-                        : 'bg-gradient-to-br from-purple-500 to-pink-500'
+                        : individual.gender == 'male' ? 'bg-gradient-to-br from-green-500 to-blue-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'
                     }`}
                   >
                     {individual.is_assigned ? (
@@ -290,7 +359,7 @@ export default function AdminIndividuals() {
                     )}
                   </div>
                   <div>
-                    <h3 className="text-white font-bold">{individual.full_name}</h3>
+                    <h3 className="text-white font-bold">{individual.full_name} - {GENDER_LABELS[individual.gender]}</h3>
                     <p className="text-gray-400 text-sm">{individual.experience_level}</p>
                   </div>
                 </div>
@@ -305,7 +374,7 @@ export default function AdminIndividuals() {
                   >
                     <Eye className="w-5 h-5" />
                   </button>
-                  {!individual.is_assigned && (
+                  {!individual.is_assigned ? (
                     <div
                       onClick={() => toggleSelect(individual.id!)}
                       className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer ${
@@ -318,7 +387,17 @@ export default function AdminIndividuals() {
                         <Check className="w-4 h-4 text-white" />
                       )}
                     </div>
-                  )}
+                  ) : <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleUnassignOne(individual)
+                    }}
+                    title="إلغاء الفرز"
+                    disabled={assigning}
+                    className="p-2 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                  >
+                    <Undo className="w-4 h-4" />
+                  </button>}
                 </div>
               </div>
 

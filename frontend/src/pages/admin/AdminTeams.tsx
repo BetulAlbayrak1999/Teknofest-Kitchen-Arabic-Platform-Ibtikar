@@ -3,7 +3,6 @@ import toast from 'react-hot-toast'
 import {
   Users,
   Search,
-  Mail,
   Send,
   Loader2,
   ChevronDown,
@@ -124,11 +123,11 @@ export default function AdminTeams() {
                 onClick={() => setExpandedTeam(expandedTeam === team.id ? null : team.id!)}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-teknofest-orange to-teknofest-red rounded-xl flex items-center justify-center">
+                  <div className={team.gender === 'male' ? "w-12 h-12 bg-gradient-to-br from-green-500 to-blue-500 rounded-xl flex items-center justify-center" : "w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center"}>
                     <Users className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">{team.team_name}</h3>
+                    <h3 className="text-lg font-bold text-white">{team.team_name} - {team.gender === 'male' ? 'ذكور' : 'إناث'}</h3>
                     <p className="text-gray-400 text-sm">{team.field}</p>
                   </div>
                 </div>

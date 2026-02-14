@@ -11,7 +11,7 @@ from datetime import timedelta
 from dotenv import load_dotenv
 from database import get_db
 from models import (
-    Admin, Team, TeamMember, Individual, ProjectSubmission,
+    Admin, Gender, Team, TeamMember, Individual, ProjectSubmission,
     ProgramVersion, RegistrationType, Evaluation
 )
 from schemas import (
@@ -220,7 +220,11 @@ async def assign_individuals_to_team(
             status_code=400,
             detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
         )
-    
+    genders = {ind.gender for ind in individuals}
+    if len(genders) != 1:
+        raise HTTPException(status_code=400, detail="لا يمكن إنشاء فريق من أفراد بجنسين مختلفين")
+
+    team_gender = genders.pop()
     # الحصول على نسخة البرنامج
     version = db.query(ProgramVersion).filter(ProgramVersion.is_active == True).first()
     
@@ -229,7 +233,8 @@ async def assign_individuals_to_team(
         team_name=assignment.team_name,
         registration_type=RegistrationType.TEAM_NO_IDEA,
         field=assignment.field.value,
-        program_version_id=version.id
+        program_version_id=version.id,
+        gender=team_gender,
     )
     db.add(team)
     db.commit()
@@ -240,6 +245,7 @@ async def assign_individuals_to_team(
         member = TeamMember(
             team_id=team.id,
             full_name=ind.full_name,
+            membership_number=ind.membership_number,
             email=ind.email,
             phone=ind.phone,
             is_leader=(i == 0)  # أول عضو يكون القائد

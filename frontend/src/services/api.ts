@@ -13,11 +13,11 @@ import type {
   TeamWithSpace,
 } from '../types'
 
-const API_BASE_URL = '/api'
+const API_BASE_URL = import.meta.env.VITE_API_TARGET || 'http://localhost:8000'
 
 // Create axios instance
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL + '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -130,6 +130,11 @@ export const individualsService = {
       team_name: teamName,
       field: field,
     })
+    return response.data
+  },
+
+  unassignIndividual: async (individualId: number) => {
+    const response = await api.post(`/students/individuals/${individualId}/unassign`)
     return response.data
   },
 
@@ -284,6 +289,13 @@ export const statsService = {
     const response = await api.get('/admin/stats')
     return response.data
   },
+}
+
+export const iForgotService = {
+  verifyMembershipNumber: async (membershipNumber: string) => {
+    const response = await api.get(`/students/verify-membership-number/${membershipNumber}`)
+    return response.data
+  }
 }
 
 export default api

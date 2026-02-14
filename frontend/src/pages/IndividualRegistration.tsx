@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { User, Lightbulb, Users, Check, ChevronLeft, ChevronRight } from 'lucide-react'
-import { PROJECT_FIELDS, type Individual, type RegistrationType } from '../types'
-import { individualsService } from '../services/api'
+import { PROJECT_FIELDS, type Individual, type RegistrationType, type Gender } from '../types'
+import { individualsService, iForgotService } from '../services/api'
 
 interface IndividualFormData {
+  membership_number: string
   full_name: string
   email: string
   phone: string
@@ -15,6 +16,12 @@ interface IndividualFormData {
   experience_level: string
   preferred_field: string
   project_idea?: string
+  gender: Gender
+}
+
+const GENDER_LABELS: Record<Gender, string> = {
+  male: 'ذكر',
+  female: 'أنثى',
 }
 
 const experienceLevels = [
@@ -29,15 +36,121 @@ export default function IndividualRegistration() {
   const [step, setStep] = useState(1)
   const [hasIdea, setHasIdea] = useState<boolean | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [verifyingMembership, setVerifyingMembership] = useState(false)
+  const [membershipStatus, setMembershipStatus] = useState<'valid' | 'invalid' | null>(null)
+  const [memberData, setMemberData] = useState<{ full_name: string; email: string; phone: string } | null>(null)
+  const membershipRequestId = useRef<number>(0)
 
   const {
     register,
     handleSubmit,
     trigger,
+    setValue,
     formState: { errors },
-  } = useForm<IndividualFormData>()
+  } = useForm<IndividualFormData>({
+    defaultValues: { gender: 'male' },
+  })
+
+  const verifyMembershipNumber = async (membershipNumber: string) => {
+    if (!membershipNumber) {
+      setMembershipStatus(null)
+
+      const wasAutofilled = !!memberData
+      setMemberData(null)
+
+      if (wasAutofilled) {
+        setValue('full_name', '')
+        setValue('email', '')
+        setValue('phone', '')
+      }
+      return
+    }
+
+    if (membershipNumber.length !== 7) {
+      setMembershipStatus('invalid')
+
+      const wasAutofilled = !!memberData
+      setMemberData(null)
+
+      if (wasAutofilled) {
+        setValue('full_name', '')
+        setValue('email', '')
+        setValue('phone', '')
+      }
+      return
+    }
+      
+
+    const requestId = Date.now()
+    membershipRequestId.current = requestId
+    setVerifyingMembership(true)
+
+    try {
+      const memberResponse = await iForgotService.verifyMembershipNumber(membershipNumber)
+
+      if (membershipRequestId.current !== requestId) return
+
+      if (memberResponse.success) {
+        setMembershipStatus('valid')
+
+        const data = {
+          full_name: memberResponse.member.ar_name || '',
+          email: memberResponse.member.email || '',
+          phone: memberResponse.member.phone || '',
+        }
+
+        setMemberData(data)
+
+        setValue('full_name', data.full_name)
+        setValue('email', data.email)
+        setValue('phone', data.phone)
+
+        // set gender from API (male/female)
+        setValue('gender', memberResponse.member.sex)
+      } else {
+        setMembershipStatus('invalid')
+        setMemberData(null)
+        setValue('full_name', '')
+        setValue('email', '')
+        setValue('phone', '')
+      }
+    } catch {
+      if (membershipRequestId.current !== requestId) return
+      setMembershipStatus('invalid')
+      setMemberData(null)
+      setValue('full_name', '')
+      setValue('email', '')
+      setValue('phone', '')
+    } finally {
+      if (membershipRequestId.current === requestId) setVerifyingMembership(false)
+    }
+  }
+
+  const useDebounce = (callback: Function, delay: number) => {
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    useEffect(() => {
+      return () => {
+        if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
+      }
+    }, [])
+
+    return (...args: any[]) => {
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => callback(...args), delay)
+    }
+  }
+
+  const debouncedVerify = useDebounce(verifyMembershipNumber, 800)
+
 
   const onSubmit = async (data: IndividualFormData) => {
+    const hasMembership = !!data.membership_number?.trim()
+    if (hasMembership && membershipStatus !== 'valid') {
+      toast.error('يرجى إدخال رقم عضوية صحيح')
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const registrationType: RegistrationType = hasIdea
@@ -48,6 +161,8 @@ export default function IndividualRegistration() {
         ...data,
         registration_type: registrationType,
         preferred_field: data.preferred_field as any,
+        gender: data.gender,
+        membership_number: data.membership_number
       }
 
       await individualsService.create(individualData)
@@ -150,6 +265,45 @@ export default function IndividualRegistration() {
               <h2 className="text-2xl font-bold text-white mb-6">المعلومات الشخصية</h2>
 
               <div className="space-y-6">
+                <div>
+                  <label className="block text-white font-medium mb-2">رقم العضوية *</label>
+                  <input
+                    {...register('membership_number', {
+                      validate: (v) => !v || v.length === 7 || 'رقم العضوية يجب أن يكون 7 أرقام',
+                    })}
+                    type="text"
+                    className="input-field"
+                    placeholder="رقم العضوية"
+                    onChange={(e) => {
+                      register('membership_number').onChange(e)
+                      debouncedVerify(e.target.value)
+                    }}
+                  />
+
+                  <div className="mt-2 flex items-center gap-2">
+                    {verifyingMembership && (
+                      <div className="flex items-center gap-2 text-blue-400 text-xs">
+                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        <span>جاري التحقق...</span>
+                      </div>
+                    )}
+                    {!verifyingMembership && membershipStatus === 'valid' && (
+                      <div className="flex items-center gap-2 text-green-400 text-xs">
+                        <span>رقم العضوية صحيح</span>
+                      </div>
+                    )}
+                    {!verifyingMembership && membershipStatus === 'invalid' && !errors.membership_number && (
+                      <div className="flex items-center gap-2 text-red-400 text-xs">
+                        <span>رقم العضوية غير صحيح</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {errors.membership_number && (
+                    <p className="text-red-400 text-sm mt-1">{errors.membership_number.message}</p>
+                  )}
+                </div>
+
                 {/* Full Name */}
                 <div>
                   <label className="block text-white font-medium mb-2">الاسم الكامل *</label>
@@ -159,7 +313,8 @@ export default function IndividualRegistration() {
                       minLength: { value: 2, message: 'الاسم قصير جداً' },
                     })}
                     type="text"
-                    className="input-field"
+                    disabled={!!memberData?.full_name}
+                    className="input-field disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
                     placeholder="أدخل اسمك الكامل"
                   />
                   {errors.full_name && (
@@ -179,8 +334,9 @@ export default function IndividualRegistration() {
                       },
                     })}
                     type="email"
-                    className="input-field"
                     placeholder="example@email.com"
+                    disabled={!!memberData?.full_name}
+                    className="input-field disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
                     dir="ltr"
                   />
                   {errors.email && (
@@ -197,7 +353,8 @@ export default function IndividualRegistration() {
                       minLength: { value: 10, message: 'رقم الهاتف غير صالح' },
                     })}
                     type="tel"
-                    className="input-field"
+                    disabled={!!memberData?.full_name}
+                    className="input-field disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
                     placeholder="+90 XXX XXX XXXX"
                     dir="ltr"
                   />
@@ -205,6 +362,23 @@ export default function IndividualRegistration() {
                     <p className="text-red-400 text-sm mt-1">{errors.phone.message}</p>
                   )}
                 </div>
+                
+                {membershipStatus !== 'valid' && (
+                <div>
+                  <label className="block text-white font-medium mb-2">الجنس *</label>
+                  <select
+                    {...register('gender', { required: 'يرجى اختيار الجنس' })}
+                    className="input-field"
+                  >
+                    <option value="male">{GENDER_LABELS.male}</option>
+                    <option value="female">{GENDER_LABELS.female}</option>
+                  </select>
+
+                  {errors.gender && (
+                    <p className="text-red-400 text-sm mt-1">{errors.gender.message as string}</p>
+                  )}
+                </div>
+              )}
 
                 {/* Experience Level */}
                 <div>
@@ -238,7 +412,10 @@ export default function IndividualRegistration() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const isValid = await trigger(['full_name', 'email', 'phone', 'experience_level'])
+                    const fieldsToValidate: any = ['full_name', 'email', 'phone', 'experience_level']
+                    if (membershipStatus !== 'valid') fieldsToValidate.push('gender')
+
+                    const isValid = await trigger(fieldsToValidate)
                     if (isValid) {
                       setStep(3)
                     }

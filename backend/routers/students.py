@@ -15,6 +15,7 @@ from schemas import (
     AssignIndividualsToTeam
 )
 from services.email_service import email_service
+from services.iforgot_service import iForgotService
 
 router = APIRouter(prefix="/api/students", tags=["المشاركون"])
 
@@ -75,7 +76,8 @@ async def register_team(team_data: TeamCreate, db: Session = Depends(get_db)):
         registration_type=RegistrationType(team_data.registration_type.value),
         field=team_data.field.value,
         initial_idea=team_data.initial_idea,
-        program_version_id=version.id
+        program_version_id=version.id,
+        gender=team_data.gender.value
     )
     
     db.add(team)
@@ -89,6 +91,7 @@ async def register_team(team_data: TeamCreate, db: Session = Depends(get_db)):
             full_name=member_data.full_name,
             email=member_data.email,
             phone=member_data.phone,
+            membership_number=member_data.membership_number,
             is_leader=member_data.is_leader
         )
         db.add(member)
@@ -162,6 +165,7 @@ async def register_individual(
     individual = Individual(
         registration_type=RegistrationType(individual_data.registration_type.value),
         full_name=individual_data.full_name,
+        membership_number=individual_data.membership_number,
         email=individual_data.email,
         phone=individual_data.phone,
         technical_skills=individual_data.technical_skills,
@@ -169,7 +173,8 @@ async def register_individual(
         experience_level=individual_data.experience_level,
         preferred_field=individual_data.preferred_field.value,
         project_idea=individual_data.project_idea,
-        program_version_id=version.id
+        program_version_id=version.id,
+        gender=individual_data.gender.value
     )
     
     db.add(individual)
@@ -293,6 +298,7 @@ async def get_teams_with_space(db: Session = Depends(get_db)):
             teams_with_space.append({
                 "id": team.id,
                 "team_name": team.team_name,
+                "gender": team.gender.value if team.gender else None,
                 "field": team.field,
                 "member_count": member_count,
                 "available_slots": 6 - member_count,
@@ -328,12 +334,21 @@ async def assign_individuals_to_team(
             detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
         )
 
+    genders = {ind.gender for ind in individuals}
+    if None in genders:
+        raise HTTPException(status_code=400, detail="بعض الأفراد لا يملكون جنساً محدداً")
+    if len(genders) != 1:
+        raise HTTPException(status_code=400, detail="لا يمكن إنشاء فريق من أفراد بجنسين مختلفين")
+
+    team_gender = genders.pop()
+    print(team_gender)
     # الحصول على نسخة البرنامج
     version = get_active_program_version(db)
 
     # إنشاء فريق جديد
     team = Team(
         team_name=assignment.team_name,
+        gender=team_gender,
         registration_type=RegistrationType.TEAM_NO_IDEA,
         field=assignment.field.value,
         program_version_id=version.id
@@ -347,6 +362,7 @@ async def assign_individuals_to_team(
         member = TeamMember(
             team_id=team.id,
             full_name=ind.full_name,
+            membership_number=ind.membership_number,
             email=ind.email,
             phone=ind.phone,
             is_leader=(i == 0)
@@ -401,12 +417,27 @@ async def add_individuals_to_existing_team(
             status_code=400,
             detail="بعض الأفراد غير موجودين أو تم فرزهم مسبقاً"
         )
+    
+    genders = {ind.gender for ind in individuals}
+    if None in genders:
+        raise HTTPException(status_code=400, detail="بعض الأفراد لا يملكون جنساً محدداً")
+
+    # إذا الفريق قديم بدون جنس: اسمح فقط إذا كل الأفراد نفس الجنس ثم ثبّت جنس الفريق
+    if not team.gender:
+        if len(genders) != 1:
+            raise HTTPException(status_code=400, detail="لا يمكن تحديد جنس الفريق لأن الأفراد بجنسين مختلفين")
+        team.gender = list(genders)[0]
+    else:
+        # الفريق له جنس: لازم كل الأفراد نفس الجنس
+        if any(ind.gender != team.gender for ind in individuals):
+            raise HTTPException(status_code=400, detail="لا يمكن إضافة أفراد بجنس مختلف عن جنس الفريق")
 
     # إضافة الأعضاء
     for ind in individuals:
         member = TeamMember(
             team_id=team.id,
             full_name=ind.full_name,
+            membership_number=ind.membership_number,
             email=ind.email,
             phone=ind.phone,
             is_leader=False
@@ -427,6 +458,54 @@ async def add_individuals_to_existing_team(
         "total_members": len(team.members)
     }
 
+
+@router.post("/individuals/{individual_id}/unassign")
+async def unassign_individual(
+    individual_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    إلغاء فرز فرد من فريقه:
+    - حذف TeamMember من team
+    - assigned_team_id = NULL
+    - is_assigned = False
+    """
+
+    individual = db.query(Individual).filter(Individual.id == individual_id).first()
+    if not individual:
+        raise HTTPException(status_code=404, detail="الفرد غير موجود")
+
+    # إذا كان غير مفرز أصلاً
+    if not individual.is_assigned or not individual.assigned_team_id:
+        return {"message": "الفرد غير مفرز بالفعل"}
+
+    team_id = individual.assigned_team_id
+
+    # حذف العضوية من TeamMember
+    member = db.query(TeamMember).filter(
+        TeamMember.team_id == team_id,
+        TeamMember.email == individual.email,
+        TeamMember.phone == individual.phone
+    ).first()
+
+    if member:
+        was_leader = member.is_leader
+        db.delete(member)
+        db.commit()
+
+        # إذا القائد انحذف، عيّن قائد جديد (اختياري لكن ممتاز)
+        if was_leader:
+            remaining = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
+            if remaining and not any(m.is_leader for m in remaining):
+                remaining[0].is_leader = True
+                db.commit()
+
+    # تحديث حالة الفرد
+    individual.is_assigned = False
+    individual.assigned_team_id = None
+    db.commit()
+
+    return {"message": "تم إلغاء فرز الفرد بنجاح", "team_id": team_id}
 
 # ==================== إرسال رابط تلغرام ====================
 
@@ -494,6 +573,19 @@ async def send_telegram_link_to_team(
 
     return results
 
+# ==================== iforgot service ====================
+@router.get("/verify-membership-number/{membership_number}")
+def verify_membership_number(membership_number: str):
+    try:
+        member_data = iForgotService.get_by_membership_number(membership_number)
+        if not member_data['success']:
+            return {"message": "رقم العضوية غير موجود"}
+        return member_data
+        
+    except Exception as e:
+        return {
+            "message": "فشل التحقق من رقم العضوية: " + str(e)
+        }
 
 def create_telegram_email_template(recipient_name: str, telegram_link: str) -> str:
     """إنشاء قالب البريد لدعوة تلغرام"""
